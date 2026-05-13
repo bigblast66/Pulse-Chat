@@ -1,0 +1,27 @@
+#person{
+    border-right: solid black 2px;
+    height: 100%;
+    width: 30%;
+    overflow: auto;
+}
+body{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 98vh;
+}
+#panel{
+    height: 75vh;
+    width: 70vw;
+    border-style: solid;
+    border-color: black;
+    border-width: 5px;
+}
+.user{
+    background-color: pink;
+    height: 10%;
+    font-size: 30px;
+    padding-left: 20px;
+    padding-top: 10px;
+    font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+}
