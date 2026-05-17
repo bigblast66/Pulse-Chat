@@ -288,12 +288,12 @@ def validate_session(token:str):
 
 @app.get("/me/{token}")
 async def user_profile(token:str):
+    connection=await get_connection("chat_db")
+    cursor=await connection.cursor()
     try:
-        if r.exists(f"blacklist:{token}"):
+        if await r.exists(f"blacklist:{token}"):
             raise HTTPException(status_code=401,detail="invalid token")
         payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
-        connection=await get_connection("chat_db")
-        cursor=await connection.cursor()
         await cursor.execute("SELECT about_me,creation_date FROM user_metadata WHERE email=%s",(payload["email"],))
         detail=await cursor.fetchone()
         return{
@@ -302,8 +302,6 @@ async def user_profile(token:str):
             "about":detail[0],
             "creation_date":detail[1]
         }
-    except HTTPException as e:
-        pass
     finally:
         await cursor.close()
         connection.close()
@@ -312,17 +310,16 @@ class about_input(BaseModel):
 
 @app.patch("/update_about/{token}")
 async def update_about(about:about_input,token:str):
+    connection=await get_connection("chat_db")
+    cursor=await connection.cursor()
     query="UPDATE user_metadata SET about_me=%s WHERE email=%s"
     try:
-        if r.exists(f"blacklist:{token}"):
+        if await r.exists(f"blacklist:{token}"):
             raise HTTPException(status_code=401,detail="invalid token")
         payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
-        connection=await get_connection("chat_db")
-        cursor=await connection.cursor()
+        
         await cursor.execute(query,(about.about,payload["email"]))
         await connection.commit()
-    except HTTPException as e:
-        pass
     finally:
         await cursor.close()
         connection.close()
@@ -342,3 +339,44 @@ async def logout(token:str):
             "process":"logout",
             "status":"success"
         }
+
+
+
+
+
+#----- REQUESTS -----
+
+
+@app.get("/request_notification/{token}")
+async def requests_count(token:str):
+    query="SELECT COUNT(*) FROM requests WHERE receiver=%s"
+    connection=await get_connection("chat_db")
+    cursor=await connection.cursor()
+    try:
+        if await r.exists(f"blacklist:{token}"):
+            raise HTTPException(status_code=401,detail="invalid token")
+        payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+        await cursor.execute(query,(payload["username"],))
+        req_count=await cursor.fetchone()
+        return{
+            "requests_count":req_count[0]
+        }
+    finally:
+        await cursor.close()
+        connection.close()
+
+@app.get("/requests_list/{token}")
+async def requests_list(token:str):
+    query=("SELECT id,sender,req_time FROM requests WHERE receiver=%s")
+    connection=await get_connection("chat_db")
+    cursor=await connection.cursor()
+    try:
+        if await r.exists(f"blacklist:{token}"):
+            raise HTTPException(status_code=401,detail="invalid token")
+        payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+        await cursor.execute(query,(payload["username"],))
+        req_list=await cursor.fetchall()
+        return req_list
+    finally:
+        await cursor.close()
+        connection.close()
