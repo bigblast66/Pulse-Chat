@@ -1,16 +1,22 @@
 from fastapi import FastAPI,HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import aiomysql
 import bcrypt
 from email_validator import validate_email,EmailNotValidError
-from datetime import datetime,timezone
+from datetime import datetime,timezone,timedelta
 from pymysql.err import IntegrityError
 import jwt
 import re
+from dotenv import load_dotenv
+import os
+import redis.asyncio as redis
 
 
-async def get_connection(db):
+r=redis.Redis(host='localhost',port=6379,decode_responses=True)
+
+async def get_connection(db_name):
     """
      connects to database and return the connection (MYSQL)
     """
@@ -18,7 +24,7 @@ async def get_connection(db):
         host="localhost",
         user="app_user",
         password="strong_password",
-        database=db
+        db=db_name
     )
 
 
@@ -34,6 +40,9 @@ def isValidEmail(email):
 
 
 def isValidUserName(username):
+    """
+    username validation with regex
+    """
     USERNAME_REGEX = r"^[a-zA-Z0-9._]{3,30}$"
     username = username.strip()
     if not username:
@@ -48,6 +57,9 @@ def isValidUserName(username):
     return None #valid
 
 def isValidPassword(password):
+    """
+    password validation
+    """
     if len(password) < 8:
         return "Password must be at least 8 characters"
 
@@ -68,17 +80,26 @@ def isValidPassword(password):
 
     return None
 
-def generate_token(email):
+load_dotenv()
+SECRET_KEY=os.getenv("JWT_SECRET")
+
+def generate_token(email,username):
+    """
+    token generation for session management
+    """
     payload={
+        "username":username,
         "email":email,
+        "exp":datetime.now(timezone.utc)+timedelta(days=1)
     }
-    pass
+    token=jwt.encode(payload,SECRET_KEY,algorithm="HS256")
+    return token
 
 
 app=FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://127.0.0.1:5500"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
@@ -102,6 +123,11 @@ class user_input_signup(BaseModel):
 
 @app.post("/signup")
 async def signup(x:user_input_signup):
+    """
+    all signup queries run this function validates email pwd username, raises exception if same email/username in db also prevents racing and generates a token
+    on successs.
+    hashed password stored never plain
+    """
     username=x.username.strip()
     email=x.email.strip()
     password_check=isValidPassword(x.password) is None and x.password==x.confirm_password
@@ -121,13 +147,31 @@ async def signup(x:user_input_signup):
             
             await cursor.execute(query,(email,bcrypt.hashpw(x.password.encode(), bcrypt.gensalt()).decode(),creation_time,username))
             await connection.commit()
+            # response=JSONResponse(
+            #     content={
+            #         "process":"signup",
+            #         "errors":0,
+            #         "status":"success"
+            #     }
+            # )
+            # response.set_cookie(
+            #     key="token",
+            #     value=generate_token(email,username),
+            #     httponly=True,
+            #     secure=False,
+            #     samesite="lax",
+            #     max_age=60*60*24
+            # )
             
+            content={
+                    "process":"signup",
+                    "errors":0,
+                    "status":"success",
+                    "token":generate_token(email,username)
+                }
             
-            return{
-                "process":"signup",
-                "errors":0,
-                "status":"success"
-            }
+            return content
+
         except IntegrityError as e:
             msg=str(e).lower()
             if "email" in msg:
@@ -156,7 +200,7 @@ async def signup(x:user_input_signup):
             errors[f"error{errors['errors']}"]="notvalidemail"
         if not password_check:
             errors["errors"]+=1
-            errors[f"error{errors['errors']}"]="pwdnomatch"
+            errors[f"error{errors['errors']}"]="pwdnomatch" if x.password!=x.confirm_password else isValidPassword(x.password)
         if not username_check:
             errors["errors"]+=1
             errors[f"error{errors['errors']}"]="invalidusername"
@@ -168,8 +212,12 @@ async def signup(x:user_input_signup):
 #todo tokenization for session management
 @app.post("/login")
 async def login(x:user_input):
+    """
+    all login queries hit this function checks database and validates.
+    hashes the pwd then checks with existing hash pwd.
+    """
     email=x.email.strip()
-    query="SELECT password FROM user_metadata WHERE email=%s"
+    query="SELECT password,username FROM user_metadata WHERE email=%s"
 
     connection=await get_connection("chat_db")
     cursor=await connection.cursor()
@@ -183,10 +231,26 @@ async def login(x:user_input):
                 "status":"fail"
             }
         if bcrypt.checkpw(x.password.encode(),creds[0].encode()):
-            return{
-                "process":"login",
-                "status":"success"
-            }
+            # response=JSONResponse(
+            #     content={
+            #         "process":"login",
+            #         "status":"success"
+            #     }
+            # )
+            # response.set_cookie(
+            #     key="token",
+            #     value=generate_token(email,creds[1]),
+            #     httponly=True,
+            #     secure=False,
+            #     samesite="lax",
+            #     max_age=60*60*24
+            # )
+            content={
+                    "process":"login",
+                    "status":"success",
+                    "token":generate_token(email,creds[1])
+                }
+            return content
         
         return{
             "process":"login",
@@ -195,3 +259,86 @@ async def login(x:user_input):
     finally:
         await cursor.close()
         connection.close()
+
+
+
+
+
+
+def validate_token(token):
+    try:
+        payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+    except jwt.exceptions.ExpiredSignatureError as e:
+        raise HTTPException(status_code=401,detail="token expired")
+        
+    except jwt.exceptions.DecodeError as e:
+        raise HTTPException(status_code=401,detail="invalid token")
+    
+    return{
+            "action":"redirect"
+        }
+
+
+
+@app.get("/session/{token}")
+def validate_session(token:str):
+    return validate_token(token)
+
+
+
+@app.get("/me/{token}")
+async def user_profile(token:str):
+    try:
+        if r.exists(f"blacklist:{token}"):
+            raise HTTPException(status_code=401,detail="invalid token")
+        payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+        connection=await get_connection("chat_db")
+        cursor=await connection.cursor()
+        await cursor.execute("SELECT about_me,creation_date FROM user_metadata WHERE email=%s",(payload["email"],))
+        detail=await cursor.fetchone()
+        return{
+            "email":payload["email"],
+            "username":payload["username"],
+            "about":detail[0],
+            "creation_date":detail[1]
+        }
+    except HTTPException as e:
+        pass
+    finally:
+        await cursor.close()
+        connection.close()
+class about_input(BaseModel):
+    about:str
+
+@app.patch("/update_about/{token}")
+async def update_about(about:about_input,token:str):
+    query="UPDATE user_metadata SET about_me=%s WHERE email=%s"
+    try:
+        if r.exists(f"blacklist:{token}"):
+            raise HTTPException(status_code=401,detail="invalid token")
+        payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+        connection=await get_connection("chat_db")
+        cursor=await connection.cursor()
+        await cursor.execute(query,(about.about,payload["email"]))
+        await connection.commit()
+    except HTTPException as e:
+        pass
+    finally:
+        await cursor.close()
+        connection.close()
+
+
+@app.get("/logout/{token}")
+async def logout(token:str):
+    try:
+        payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+        exp=payload["exp"]
+        now=int(datetime.now(timezone.utc).timestamp())
+        ttl=exp-now
+        if ttl>0:
+            await r.setex(f"blacklist:{token}",ttl,"1")
+    finally:
+        return{
+            "process":"logout",
+            "status":"success"
+        }
