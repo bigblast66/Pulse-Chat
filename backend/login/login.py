@@ -1,4 +1,4 @@
-from fastapi import FastAPI,HTTPException
+from fastapi import FastAPI,HTTPException,WebSocket,WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -12,6 +12,7 @@ import re
 from dotenv import load_dotenv
 import os
 import redis.asyncio as redis
+import json
 
 
 r=redis.Redis(host='localhost',port=6379,decode_responses=True)
@@ -380,3 +381,74 @@ async def requests_list(token:str):
     finally:
         await cursor.close()
         connection.close()
+
+
+user_socket={}
+socket_user={}
+
+@app.websocket("/pulse/{token}")
+async def socket_manager(websocket: WebSocket,token:str):
+
+
+    await websocket.accept()
+    
+
+    try:
+        if await r.exists(f"blacklist:{token}"):
+            raise HTTPException(status_code=401,detail="invalid token")
+        payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+
+
+        if user_socket.get(payload["username"]) is None:
+            user_socket[payload["username"]]=[websocket]
+            socket_user[websocket]=payload["username"]
+        else:
+            user_socket[payload["username"]].append(websocket)
+            socket_user[websocket]=payload["username"]
+
+
+        while True:
+            data=await websocket.receive_text()
+            data=json.loads(data)
+            if data["type"]=="request":
+                query1="DELETE FROM requests WHERE id=%s"
+                connection=await get_connection("chat_db")
+                cursor=await connection.cursor()
+                await cursor.execute(query1,(data["id"],))
+
+                if data["status"]=="accept":
+                    query2="INSERT INTO friends (user1,user2,friend_date) VALUES(%s,%s,%s)"
+                    friend_date=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                    await cursor.execute(query2,(socket_user[websocket],data["username"],friend_date))
+                    await cursor.execute(query2,(data["username"],socket_user[websocket],friend_date))
+                    if user_socket.get(data["username"]) is not None:
+                        for soc in user_socket[data["username"]]:
+                            soc.send_text(json.dump({
+                                "type":"request",
+                                "status":"accepted",
+                                "username":socket_user[websocket]
+                            }))
+                else:
+                    if user_socket.get(data["username"]) is not None:
+                        for soc in user_socket[data["username"]]:
+                            soc.send_text(json.dump({
+                                "type":"request",
+                                "status":"rejected",
+                                "username":socket_user[websocket]
+                            }))
+
+                await connection.commit()
+                await cursor.execute()
+                await cursor.close()
+                connection.close()
+            
+
+    except WebSocketDisconnect:
+        username=socket_user[websocket]
+        if socket_user.get(websocket) is not None:
+            del socket_user[websocket]
+        if username is not None and user_socket.get(username) is not None:
+            if len(user_socket[websocket])==1:
+                del user_socket[username]
+            else:
+                user_socket[username].remove(websocket)
