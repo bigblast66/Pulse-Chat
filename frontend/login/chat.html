@@ -1,5 +1,3 @@
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -43,7 +41,7 @@ body {
   display: flex;
 }
 
-/* ── NAV RAIL ── */
+/* NAV RAIL */
 .nav-rail {
   width: var(--nav-w);
   height: 100vh;
@@ -88,7 +86,6 @@ body {
 }
 
 .nav-btn svg { width: 18px; height: 18px; }
-
 .nav-btn:hover { background: var(--surface2); color: var(--text-muted); }
 .nav-btn.active { background: var(--accent-dim); color: var(--accent); }
 
@@ -136,7 +133,7 @@ body {
   border: 2px solid var(--surface);
 }
 
-/* ── SIDEBAR ── */
+/* SIDEBAR */
 .sidebar {
   width: var(--sidebar-w);
   height: 100vh;
@@ -160,9 +157,7 @@ body {
   letter-spacing: -0.2px;
 }
 
-.search-wrap {
-  position: relative;
-}
+.search-wrap { position: relative; }
 
 .search-wrap svg {
   position: absolute;
@@ -280,10 +275,7 @@ body {
   flex-shrink: 0;
 }
 
-.contact-time {
-  font-size: 11px;
-  color: var(--text-dim);
-}
+.contact-time { font-size: 11px; color: var(--text-dim); }
 
 .unread-badge {
   background: var(--accent);
@@ -296,7 +288,7 @@ body {
   text-align: center;
 }
 
-/* ── MAIN AREA ── */
+/* MAIN */
 .main {
   flex: 1;
   display: flex;
@@ -305,7 +297,6 @@ body {
   overflow: hidden;
 }
 
-/* Empty state */
 .empty-state {
   flex: 1;
   display: flex;
@@ -328,22 +319,9 @@ body {
 }
 
 .empty-icon svg { width: 26px; height: 26px; color: var(--text-dim); }
+.empty-title { font-size: 15px; font-weight: 600; color: var(--text-muted); }
+.empty-sub { font-size: 13px; color: var(--text-dim); text-align: center; max-width: 220px; line-height: 1.5; }
 
-.empty-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.empty-sub {
-  font-size: 13px;
-  color: var(--text-dim);
-  text-align: center;
-  max-width: 220px;
-  line-height: 1.5;
-}
-
-/* Chat area */
 .chat-area { display: none; flex-direction: column; height: 100%; }
 .chat-area.visible { display: flex; }
 
@@ -371,7 +349,6 @@ body {
 .chat-header-info { flex: 1; }
 .chat-header-name { font-size: 14px; font-weight: 600; color: var(--text); }
 .chat-header-status { font-size: 12px; color: var(--text-dim); }
-
 .chat-header-actions { display: flex; gap: 4px; }
 
 .icon-btn {
@@ -424,13 +401,7 @@ body {
 .msg-date-divider::before { left: 0; }
 .msg-date-divider::after { right: 0; }
 
-.msg-row {
-  display: flex;
-  gap: 8px;
-  align-items: flex-end;
-  max-width: 100%;
-}
-
+.msg-row { display: flex; gap: 8px; align-items: flex-end; max-width: 100%; }
 .msg-row.mine { flex-direction: row-reverse; }
 
 .msg-avatar-sm {
@@ -452,30 +423,13 @@ body {
   border-radius: 12px;
   font-size: 13.5px;
   line-height: 1.5;
-  position: relative;
   word-break: break-word;
 }
 
-.msg-row:not(.mine) .msg-bubble {
-  background: var(--surface2);
-  color: var(--text);
-  border-bottom-left-radius: 3px;
-}
+.msg-row:not(.mine) .msg-bubble { background: var(--surface2); color: var(--text); border-bottom-left-radius: 3px; }
+.msg-row.mine .msg-bubble { background: var(--accent); color: #fff; border-bottom-right-radius: 3px; }
 
-.msg-row.mine .msg-bubble {
-  background: var(--accent);
-  color: #fff;
-  border-bottom-right-radius: 3px;
-}
-
-.msg-time {
-  font-size: 10.5px;
-  color: var(--text-dim);
-  margin-top: 3px;
-  text-align: right;
-  padding: 0 4px;
-}
-
+.msg-time { font-size: 10.5px; color: var(--text-dim); margin-top: 3px; text-align: right; padding: 0 4px; }
 .msg-row.mine .msg-time { text-align: left; }
 
 .chat-input-area {
@@ -530,7 +484,7 @@ body {
 .send-btn:active { transform: scale(0.93); }
 .send-btn svg { width: 15px; height: 15px; color: #fff; }
 
-/* ── OVERLAYS ── */
+/* OVERLAYS */
 .overlay {
   position: fixed;
   inset: 0;
@@ -584,7 +538,7 @@ body {
 .close-btn:hover { background: var(--surface2); color: var(--text-muted); }
 .close-btn svg { width: 15px; height: 15px; }
 
-/* ── PROFILE MODAL ── */
+/* PROFILE MODAL */
 #profile-modal .modal { max-width: 400px; }
 
 .profile-hero {
@@ -627,17 +581,8 @@ body {
 .profile-avatar-lg:hover .avatar-edit-hint { opacity: 1; }
 .avatar-edit-hint svg { width: 18px; height: 18px; color: #fff; }
 
-.profile-name-display {
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: -0.3px;
-}
-
-.profile-email-display {
-  font-size: 12.5px;
-  color: var(--text-muted);
-  margin-top: -6px;
-}
+.profile-name-display { font-size: 17px; font-weight: 600; letter-spacing: -0.3px; }
+.profile-email-display { font-size: 12.5px; color: var(--text-muted); margin-top: -6px; }
 
 .profile-status-chip {
   display: flex;
@@ -682,15 +627,9 @@ body {
 
 .profile-field input:focus,
 .profile-field textarea:focus { border-color: var(--border2); }
+.profile-field input[readonly] { color: var(--text-muted); cursor: default; }
 
-.profile-field input[readonly],
-.profile-field textarea[readonly] { color: var(--text-muted); cursor: default; }
-
-.profile-actions {
-  padding: 0 20px 20px;
-  display: flex;
-  gap: 8px;
-}
+.profile-actions { padding: 0 20px 20px; display: flex; gap: 8px; }
 
 .btn-primary {
   flex: 1;
@@ -723,16 +662,41 @@ body {
 
 .btn-secondary:hover { background: var(--surface2); }
 
-/* ── REQUESTS MODAL ── */
+/* REQUESTS MODAL */
 #requests-modal .modal { max-width: 420px; }
 
-.requests-list { padding: 8px 12px 16px; display: flex; flex-direction: column; gap: 4px; max-height: 400px; overflow-y: auto; }
+.req-tabs { display: flex; border-bottom: 1px solid var(--border); }
+
+.req-tab {
+  flex: 1;
+  padding: 10px 0;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.req-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.requests-list {
+  padding: 8px 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 340px;
+  overflow-y: auto;
+}
 
 .request-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 10px;
+  padding: 10px;
   border-radius: var(--radius-sm);
   transition: background 0.12s;
 }
@@ -754,7 +718,6 @@ body {
 .request-info { flex: 1; min-width: 0; }
 .request-name { font-size: 13.5px; font-weight: 500; color: var(--text); }
 .request-meta { font-size: 12px; color: var(--text-dim); margin-top: 1px; }
-
 .request-btns { display: flex; gap: 6px; }
 
 .req-accept {
@@ -786,14 +749,9 @@ body {
 
 .req-decline:hover { background: var(--surface2); }
 
-.empty-requests {
-  padding: 40px 20px;
-  text-align: center;
-  color: var(--text-dim);
-  font-size: 13px;
-}
+.empty-requests { padding: 40px 20px; text-align: center; color: var(--text-dim); font-size: 13px; }
 
-/* toast */
+/* TOAST */
 .toast {
   position: fixed;
   bottom: 24px;
@@ -843,7 +801,7 @@ body {
   <div class="nav-spacer"></div>
 
   <div class="nav-avatar" onclick="openProfile()" title="Your profile">
-    AJ
+    ??
     <span class="status-dot"></span>
   </div>
   <button class="nav-btn" title="Logout" onclick="logout()">
@@ -860,18 +818,12 @@ body {
       <input class="search-input" type="text" placeholder="Search conversations…">
     </div>
   </div>
-
   <div class="sidebar-section-label">Recent</div>
-
-  <div class="contact-list">
-    <!-- contacts injected by JS -->
-  </div>
+  <div class="contact-list" id="contact-list"></div>
 </aside>
 
 <!-- MAIN -->
 <main class="main">
-
-  <!-- Empty state -->
   <div class="empty-state" id="empty-state">
     <div class="empty-icon">
       <svg viewBox="0 0 24 24" fill="none"><path d="M3 6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7l-4 3V6z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
@@ -880,7 +832,6 @@ body {
     <div class="empty-sub">Pick someone from the sidebar to start chatting</div>
   </div>
 
-  <!-- Chat area -->
   <div class="chat-area" id="chat-area">
     <div class="chat-header">
       <div class="chat-header-avatar" id="chat-avatar"></div>
@@ -898,9 +849,7 @@ body {
       </div>
     </div>
 
-    <div class="messages-area" id="messages-area">
-      <!-- messages injected by JS -->
-    </div>
+    <div class="messages-area" id="messages-area"></div>
 
     <div class="chat-input-area">
       <div class="input-row">
@@ -911,7 +860,6 @@ body {
       </div>
     </div>
   </div>
-
 </main>
 
 <!-- PROFILE MODAL -->
@@ -923,34 +871,31 @@ body {
         <svg viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       </button>
     </div>
-
     <div class="profile-hero">
-      <div class="profile-avatar-lg">
-        AJ
+      <div class="profile-avatar-lg" id="profile-avatar-lg">
+        ??
         <div class="avatar-edit-hint">
           <svg viewBox="0 0 16 16" fill="none"><path d="M11 2l3 3-9 9H2v-3L11 2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
         </div>
       </div>
-      <div class="profile-name-display" id="profile-name-display">Alex Johnson</div>
-      <div class="profile-email-display">alex@example.com</div>
+      <div class="profile-name-display" id="profile-name-display"></div>
+      <div class="profile-email-display" id="profile-email-display"></div>
       <div class="profile-status-chip"><span class="dot"></span> Online</div>
     </div>
-
     <div class="profile-fields">
       <div class="profile-field">
         <label>Username</label>
-        <input type="text" value="alex.j" readonly id="profile-username">
+        <input type="text" readonly id="profile-username">
       </div>
       <div class="profile-field">
         <label>Email</label>
-        <input type="email" value="alex@example.com" readonly id="profile-email">
+        <input type="email" readonly id="profile-email">
       </div>
       <div class="profile-field">
         <label>About me</label>
         <textarea rows="3" placeholder="Write something about yourself…" id="profile-about"></textarea>
       </div>
     </div>
-
     <div class="profile-actions">
       <button class="btn-secondary" onclick="logout()">Logout</button>
       <button class="btn-secondary" onclick="closeModal('profile-modal')">Cancel</button>
@@ -968,6 +913,23 @@ body {
         <svg viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       </button>
     </div>
+
+   
+    <!-- send request -->
+<div style="padding:12px 16px;border-bottom:1px solid var(--border);">
+  <div style="display:flex;gap:8px;">
+    <input type="text" id="send-req-input" class="search-input" placeholder="Type username to add…" style="flex:1;padding-left:12px;" onkeydown="if(event.key==='Enter') sendRequest()">
+    <button class="req-accept" id="send-req-btn" onclick="sendRequest()">Send</button>
+  </div>
+  <div id="send-req-feedback" style="font-size:12px;margin-top:6px;display:none;"></div>
+</div>
+
+    <!-- tabs -->
+    <div class="req-tabs">
+      <button class="req-tab active" id="tab-incoming" onclick="switchReqTab('incoming')">Incoming</button>
+      <button class="req-tab" id="tab-outgoing" onclick="switchReqTab('outgoing')">Outgoing</button>
+    </div>
+
     <div class="requests-list" id="requests-list"></div>
   </div>
 </div>
@@ -976,108 +938,108 @@ body {
 <div class="toast" id="toast"><div class="toast-dot"></div><span id="toast-msg"></span></div>
 
 <script>
-let originalAbout = '';
-let ws;
-let currentUsername; // store logged in username
-
-
 const API = 'http://127.0.0.1:8000';
-    document.addEventListener("DOMContentLoaded",async ()=>{
-        const token=localStorage.getItem("token");
+let ws;
+let currentUsername;
+let originalAbout = '';
+let activeReqTab = 'incoming';
 
-        let res=await fetch(`${API}/session/${token}`);
-
-        if(!res.ok){
-            location.href="./index.html";   
-        }
-        res = await fetch(`${API}/me/${token}`);
-        let data = await res.json();
-        if (!data) return;
-        currentUsername = data.username;
-        connectWebSocket(token);
-
-        document.querySelector('.nav-avatar').childNodes[0].textContent = data.username.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
-
-
-        const countRes = await fetch(`${API}/request_notification/${token}`);
-        const countData = await countRes.json();
-        updateRequestBadge(countData.requests_count);
-    });
-
-//------ websocket ------
-function connectWebSocket(token) {
-  ws = new WebSocket(`ws://127.0.0.1:8000/pulse/${token}`);
-  
-  ws.onmessage = (event) => {
-    const msg = JSON.parse(event.data);
-    
-    if (msg.type === 'request_receive') {
-      // someone sent us a request, increment badge
-      const badge = document.querySelector('.nav-badge');
-      const current = parseInt(badge.textContent) || 0;
-      updateRequestBadge(current + 1);
-    }
-    
-    if (msg.type === 'request_send') {
-      if (msg.reason === 'success') showToast('Request sent');
-      else if (msg.reason === 'request_exists') showToast('Request already sent');
-      else if (msg.reason === 'already_friend') showToast('Already friends');
-      else if (msg.reason === 'user_no_exist') showToast('User not found');
-    }
-    
-    if (msg.type === 'request') {
-      if (msg.status === 'accepted') showToast(`${msg.username} accepted your request`);
-    }
-  };
-
-  ws.onclose = () => {
-    // reconnect after 3s if disconnected
-    setTimeout(() => connectWebSocket(token), 3000);
-  };
-}
-// ── MOCK DATA ──
 const avatarColors = [
   ['#3b4fd4','#c7cbf9'],['#2e7d5e','#a8d5c2'],['#8b3a3a','#f5c2c2'],
   ['#5a3e8a','#d0bbf5'],['#8a5a1a','#f5d8a0'],['#1a5a8a','#a0d4f5'],
 ];
 
+// mock contacts/messages — replace with backend later
 const contacts = [
-  { id:1, name:'Priya Sharma',    username:'priya.s',   status:'online', preview:'sounds good!',           time:'2m',  unread:3,  color:0 },
-  { id:2, name:'Rohan Mehta',     username:'rohan_m',   status:'online', preview:'can u send the file?',   time:'18m', unread:0,  color:1 },
-  { id:3, name:'Sara Kim',        username:'sara.kim',  status:'away',   preview:'ok see u tmrw',          time:'1h',  unread:1,  color:2 },
-  { id:4, name:'Dev Patel',       username:'devp',      status:'offline',preview:'👍',                     time:'3h',  unread:0,  color:3 },
-  { id:5, name:'Aisha Noor',      username:'aisha.n',   status:'online', preview:'haha yeah exactly',      time:'yday',unread:0,  color:4 },
-  { id:6, name:'Carlos Reyes',    username:'c.reyes',   status:'offline',preview:'let me check and get back',time:'yday',unread:0, color:5 },
-  
-];
-
-const requests = [
-  { id:1, name:'Meera Iyer',   username:'meera.i',  time:'2 hours ago',  color:2 },
-  { id:2, name:'Arjun Das',    username:'arjun_d',  time:'yesterday',    color:3 },
+  { id:1, name:'Priya Sharma',  username:'priya.s',  status:'online',  preview:'sounds good!',            time:'2m',   unread:3, color:0 },
+  { id:2, name:'Rohan Mehta',   username:'rohan_m',  status:'online',  preview:'can u send the file?',    time:'18m',  unread:0, color:1 },
+  { id:3, name:'Sara Kim',      username:'sara.kim', status:'away',    preview:'ok see u tmrw',           time:'1h',   unread:1, color:2 },
+  { id:4, name:'Dev Patel',     username:'devp',     status:'offline', preview:'👍',                      time:'3h',   unread:0, color:3 },
+  { id:5, name:'Aisha Noor',    username:'aisha.n',  status:'online',  preview:'haha yeah exactly',       time:'yday', unread:0, color:4 },
+  { id:6, name:'Carlos Reyes',  username:'c.reyes',  status:'offline', preview:'let me check and get back',time:'yday',unread:0, color:5 },
 ];
 
 const mockMessages = {
   1:[
     { from:'them', text:'hey! are you free this evening?', time:'6:30 PM' },
-    { from:'me',   text:'yeah should be free after 7', time:'6:31 PM' },
-    { from:'them', text:'perfect, let\'s catch up then', time:'6:31 PM' },
-    { from:'me',   text:'sounds good!', time:'6:32 PM' },
-    { from:'them', text:'sounds good!', time:'6:33 PM' },
+    { from:'me',   text:'yeah should be free after 7',     time:'6:31 PM' },
+    { from:'them', text:"perfect, let's catch up then",    time:'6:31 PM' },
+    { from:'me',   text:'sounds good!',                    time:'6:32 PM' },
   ],
   2:[
     { from:'me',   text:'hey rohan, can you send the design files?', time:'11:00 AM' },
-    { from:'them', text:'sure, one sec', time:'11:02 AM' },
-    { from:'them', text:'can u send the file?', time:'11:05 AM' },
+    { from:'them', text:'sure, one sec',                             time:'11:02 AM' },
+    { from:'them', text:'can u send the file?',                      time:'11:05 AM' },
   ],
 };
 
 let activeContact = null;
 
-// ── RENDER CONTACTS ──
-function initials(name) { return name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase(); }
+// ── INIT ──
+document.addEventListener('DOMContentLoaded', async () => {
+  const token = localStorage.getItem('token');
+
+  const sessionRes = await fetch(`${API}/session/${token}`);
+  if (!sessionRes.ok) { location.href = './index.html'; return; }
+
+  const meRes = await fetch(`${API}/me/${token}`);
+  const me = await meRes.json();
+  if (!me) return;
+
+  currentUsername = me.username;
+  document.querySelector('.nav-avatar').childNodes[0].textContent = me.username.slice(0,2).toUpperCase();
+
+  const countRes = await fetch(`${API}/request_notification/${token}`);
+  const countData = await countRes.json();
+  updateRequestBadge(countData.requests_count);
+
+  connectWebSocket(token);
+  renderContacts();
+});
+
+// ── WEBSOCKET ──
+function connectWebSocket(token) {
+  ws = new WebSocket(`ws://127.0.0.1:8000/pulse/${token}`);
+
+  ws.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+
+    if (msg.type === 'request_receive') {
+  const badge = document.querySelector('.nav-badge');
+  const current = parseInt(badge.textContent) || 0;
+  updateRequestBadge(current + 1);
+  // if modal open on incoming tab, refresh it
+  if (document.getElementById('requests-modal').classList.contains('open') && activeReqTab === 'incoming') {
+    switchReqTab('incoming');
+  }
+}
+
+    if (msg.type === 'request_send') {
+  if (msg.reason === 'success') {
+    showReqFeedback('Request sent', true);
+    if (activeReqTab === 'outgoing') switchReqTab('outgoing');
+  } else if (msg.reason === 'request_exists') showReqFeedback('Request already sent to this user', false);
+  else if (msg.reason === 'already_friend')   showReqFeedback('Already friends', false);
+  else if (msg.reason === 'user_no_exist')    showReqFeedback('User not found', false);
+}
+
+    if (msg.type === 'request') {
+      if (msg.status === 'accepted') showToast(`${msg.username} accepted your request`);
+    }
+
+    if(msg.type==='request_takeback'){
+      
+    }
+  };
+
+  ws.onclose = () => setTimeout(() => connectWebSocket(token), 3000);
+}
+
+// ── CONTACTS ──
+function initials(name) { return name.slice(0,2).toUpperCase(); }
 
 function renderContacts() {
-  const list = document.querySelector('.contact-list');
+  const list = document.getElementById('contact-list');
   list.innerHTML = contacts.map(c => {
     const [bg, fg] = avatarColors[c.color];
     return `
@@ -1098,7 +1060,7 @@ function renderContacts() {
   }).join('');
 }
 
-// ── OPEN CHAT ──
+// ── CHAT ──
 function openChat(id) {
   activeContact = contacts.find(c => c.id === id);
   document.querySelectorAll('.contact-item').forEach(el => el.classList.remove('active'));
@@ -1107,24 +1069,16 @@ function openChat(id) {
   const [bg, fg] = avatarColors[activeContact.color];
   const avatar = document.getElementById('chat-avatar');
   avatar.textContent = initials(activeContact.name);
-  avatar.style.background = `${bg}20`;
-  avatar.style.color = fg;
-  avatar.style.width = '32px';
-  avatar.style.height = '32px';
+  avatar.style.cssText = `background:${bg}20;color:${fg};width:32px;height:32px;`;
 
   document.getElementById('chat-name').textContent = activeContact.name;
-  document.getElementById('chat-status').textContent =
-    activeContact.status === 'online' ? '● Online' :
-    activeContact.status === 'away'   ? '◐ Away' : '○ Offline';
-  document.getElementById('chat-status').style.color =
-    activeContact.status === 'online' ? 'var(--online)' :
-    activeContact.status === 'away'   ? 'var(--away)' : 'var(--text-dim)';
+  const statusEl = document.getElementById('chat-status');
+  statusEl.textContent = activeContact.status === 'online' ? '● Online' : activeContact.status === 'away' ? '◐ Away' : '○ Offline';
+  statusEl.style.color = activeContact.status === 'online' ? 'var(--online)' : activeContact.status === 'away' ? 'var(--away)' : 'var(--text-dim)';
 
-  // clear unread
   activeContact.unread = 0;
   renderContacts();
   document.getElementById(`contact-${id}`)?.classList.add('active');
-
   renderMessages(id);
 
   document.getElementById('empty-state').style.display = 'none';
@@ -1136,11 +1090,13 @@ function openChat(id) {
 function renderMessages(id) {
   const area = document.getElementById('messages-area');
   const msgs = mockMessages[id] || [];
-  if (!msgs.length) { area.innerHTML = `<div style="text-align:center;color:var(--text-dim);font-size:13px;margin-top:40px">No messages yet. Say hi!</div>`; return; }
-
+  if (!msgs.length) {
+    area.innerHTML = `<div style="text-align:center;color:var(--text-dim);font-size:13px;margin-top:40px">No messages yet. Say hi!</div>`;
+    return;
+  }
+  const [bg, fg] = avatarColors[activeContact.color];
   area.innerHTML = `<div class="msg-date-divider">Today</div>` + msgs.map(m => {
     const isMine = m.from === 'me';
-    const [bg, fg] = avatarColors[activeContact.color];
     const theirAvatar = `<div class="msg-avatar-sm" style="background:${bg}20;color:${fg}">${initials(activeContact.name)}</div>`;
     return `
     <div class="msg-row ${isMine ? 'mine' : ''}">
@@ -1151,21 +1107,16 @@ function renderMessages(id) {
       </div>
     </div>`;
   }).join('');
-
   area.scrollTop = area.scrollHeight;
 }
 
-// ── SEND MESSAGE ──
 function sendMessage() {
   const input = document.getElementById('msg-input');
   const text = input.value.trim();
   if (!text || !activeContact) return;
-
-  const now = new Date();
-  const time = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  const time = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
   if (!mockMessages[activeContact.id]) mockMessages[activeContact.id] = [];
   mockMessages[activeContact.id].push({ from:'me', text, time });
-
   activeContact.preview = text;
   activeContact.time = 'now';
   renderContacts();
@@ -1179,30 +1130,25 @@ function handleKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 }
 
-// auto-grow textarea
 document.getElementById('msg-input').addEventListener('input', function() {
   this.style.height = 'auto';
   this.style.height = Math.min(this.scrollHeight, 100) + 'px';
 });
 
 // ── PROFILE ──
-
-
 async function openProfile() {
   const res = await fetch(`${API}/me/${localStorage.getItem('token')}`);
-  if (!res.ok) return; // apiFetch handles 401 redirect
-
+  if (!res.ok) return;
   const data = await res.json();
-  // populate the modal fields
-  document.getElementById('profile-name-display').textContent = data.username;
-  document.getElementById('profile-email').value = data.email;
-  document.getElementById('profile-username').value = data.username;
-  document.getElementById('profile-about').value = data.about ?? '';
-originalAbout = data.about ?? '';
 
-  // open modal after data is ready
-  document.querySelector('.profile-email-display').textContent = formatJoinDate(data.creation_date);
-  document.querySelector('.profile-avatar-lg').childNodes[0].textContent = initials(data.username);
+  document.getElementById('profile-name-display').textContent = data.username;
+  document.getElementById('profile-email-display').textContent = formatJoinDate(data.creation_date);
+  document.getElementById('profile-username').value = data.username;
+  document.getElementById('profile-email').value = data.email;
+  document.getElementById('profile-about').value = data.about ?? '';
+  document.getElementById('profile-avatar-lg').childNodes[0].textContent = data.username.slice(0,2).toUpperCase();
+  originalAbout = data.about ?? '';
+
   document.getElementById('profile-modal').classList.add('open');
 }
 
@@ -1216,30 +1162,25 @@ document.getElementById('profile-about').addEventListener('input', function() {
 
 function formatJoinDate(dateStr) {
   const date = new Date(dateStr);
-  return 'Joined on ' + date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  return 'Joined ' + date.toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' });
 }
-
-
 
 async function saveProfile() {
   const about = document.getElementById('profile-about').value.trim();
-
   const res = await fetch(`${API}/update_about/${localStorage.getItem('token')}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ about })
   });
-  
-  if (!res) return;
+  if (!res.ok) return;
+  originalAbout = about;
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true;
+  btn.style.opacity = '0.45';
+  btn.style.cursor = 'not-allowed';
   closeModal('profile-modal');
   showToast('Profile saved');
-  originalAbout = document.getElementById('profile-about').value.trim();
-const btn = document.getElementById('save-btn');
-btn.disabled = true;
-btn.style.opacity = '0.45';
-btn.style.cursor = 'not-allowed';
 }
-
 
 // ── LOGOUT ──
 async function logout() {
@@ -1249,82 +1190,107 @@ async function logout() {
   window.location.href = './index.html';
 }
 
-
 // ── REQUESTS ──
-function renderRequests(data) {
+async function openRequests() {
+  document.getElementById('requests-modal').classList.add('open');
+  updateRequestBadge(0);
+  switchReqTab('incoming');
+}
+
+async function switchReqTab(tab) {
+  activeReqTab = tab;
+  document.getElementById('tab-incoming').classList.toggle('active', tab === 'incoming');
+  document.getElementById('tab-outgoing').classList.toggle('active', tab === 'outgoing');
+
+  const token = localStorage.getItem('token');
+  const endpoint = tab === 'incoming' ? 'requests_list' : 'requests_list_outgoing';
+  const res = await fetch(`${API}/${endpoint}/${token}`);
+  const data = await res.json();
+  renderRequests(data, tab);
+}
+
+function renderRequests(data, tab) {
   const list = document.getElementById('requests-list');
   if (!data || !data.length) {
-    list.innerHTML = `<div class="empty-requests">No pending requests</div>`;
+    list.innerHTML = `<div class="empty-requests">No ${tab} requests</div>`;
     return;
   }
+  // backend returns tuples: [id, sender/receiver, req_time]
   list.innerHTML = data.map((r, i) => {
     const [bg, fg] = avatarColors[i % avatarColors.length];
+    const displayName = r[1];
     return `
-    <div class="request-item" id="req-${r.id}">
-      <div class="request-avatar" style="background:${bg}20;color:${fg}">${r.sender.slice(0,2).toUpperCase()}</div>
+    <div class="request-item" id="req-${r[0]}">
+      <div class="request-avatar" style="background:${bg}20;color:${fg}">${displayName.slice(0,2).toUpperCase()}</div>
       <div class="request-info">
-        <div class="request-name">${r.sender}</div>
-        <div class="request-meta">${r.req_time}</div>
+        <div class="request-name">${displayName}</div>
+        <div class="request-meta">${r[2]}</div>
       </div>
       <div class="request-btns">
-        <button class="req-accept" onclick="acceptReq(${r[0]}, '${r[1]}')">Accept</button>
-        <button class="req-decline" onclick="declineReq(${r[0]}, '${r[1]}')">Decline</button>
+        ${tab === 'incoming' ? `
+          <button class="req-accept" onclick="acceptReq(${r[0]}, '${displayName}')">Accept</button>
+          <button class="req-decline" onclick="declineReq(${r[0]}, '${displayName}')">Decline</button>
+        ` : `
+          <button class="req-decline" onclick="takebackReq(${r[0]}, '${displayName}')">Cancel</button>
+        `}
       </div>
     </div>`;
   }).join('');
 }
 
+function acceptReq(id, senderUsername) {
+  ws.send(JSON.stringify({ type:'request', id, username:senderUsername, status:'accept' }));
+  document.getElementById(`req-${id}`)?.remove();
+  if (!document.querySelectorAll('.request-item').length)
+    document.getElementById('requests-list').innerHTML = `<div class="empty-requests">No incoming requests</div>`;
+}
+
+function declineReq(id, username) {
+  ws.send(JSON.stringify({ type:'request', id, username, status:'decline' }));
+  document.getElementById(`req-${id}`)?.remove();
+  if (!document.querySelectorAll('.request-item').length)
+    document.getElementById('requests-list').innerHTML = `<div class="empty-requests">No ${activeReqTab} requests</div>`;
+}
+
+function takebackReq(id, username) {
+  ws.send(JSON.stringify({ type:'request_takeback', id, username, status:'decline' }));
+  document.getElementById(`req-${id}`)?.remove();
+  if (!document.querySelectorAll('.request-item').length)
+    document.getElementById('requests-list').innerHTML = `<div class="empty-requests">No ${activeReqTab} requests</div>`;
+}
+
+function sendRequest() {
+  const input = document.getElementById('send-req-input');
+  const username = input.value.trim();
+  if (!username || !ws) return;
+  ws.send(JSON.stringify({ type:'request_send', username }));
+}
+
+function showReqFeedback(msg, ok) {
+  const fb = document.getElementById('send-req-feedback');
+  const input = document.getElementById('send-req-input');
+  fb.textContent = msg;
+  fb.style.display = 'block';
+  fb.style.color = ok ? 'var(--success)' : 'var(--danger)';
+  input.style.borderColor = ok ? 'rgba(76,175,138,0.5)' : 'rgba(224,92,92,0.5)';
+  // reset after 3s
+  setTimeout(() => {
+    fb.style.display = 'none';
+    input.style.borderColor = '';
+    if (ok) input.value = '';
+  }, 3000);
+}
+
+// ── BADGE ──
 function updateRequestBadge(count) {
   const badge = document.querySelector('.nav-badge');
   if (count > 0) {
     badge.textContent = count > 99 ? '99+' : count;
-    badge.style.width = 'auto';
-    badge.style.minWidth = '16px';
-    badge.style.height = '16px';
-    badge.style.borderRadius = '8px';
-    badge.style.fontSize = '9px';
-    badge.style.fontWeight = '600';
-    badge.style.color = '#fff';
-    badge.style.padding = '0 4px';
-    badge.style.top = '4px';
-    badge.style.right = '4px';
-    badge.style.display='unset'
+    badge.style.cssText = `display:unset;width:auto;min-width:16px;height:16px;border-radius:8px;font-size:9px;font-weight:600;color:#fff;padding:0 4px;top:4px;right:4px;`;
   } else {
     badge.textContent = '';
-    badge.style.width = '7px';
-    badge.style.minWidth = 'unset';
-    badge.style.height = '7px';
-    badge.style.borderRadius = '50%';
-    badge.style.padding = '0';
-    badge.style.top = '6px';
-    badge.style.right = '6px';
-    badge.style.display='none'
+    badge.style.cssText = `display:none;width:7px;height:7px;border-radius:50%;padding:0;top:6px;right:6px;`;
   }
-}
-
-async function openRequests() {
-  const token = localStorage.getItem('token');
-  const res = await fetch(`${API}/requests_list/${token}`);
-  const data = await res.json();
-  // replace mock requests with real data
-  renderRequests(data.requests);
-  document.getElementById('requests-modal').classList.add('open');
-  // clear badge since they've now seen requests
-  updateRequestBadge(0);
-}
-
-function acceptReq(id, senderUsername) {
-  ws.send(JSON.stringify({ type: 'request', id, username: senderUsername, status: 'accept' }));
-  document.getElementById(`req-${id}`)?.remove();
-  const remaining = document.querySelectorAll('.request-item').length;
-  if (!remaining) document.getElementById('requests-list').innerHTML = `<div class="empty-requests">No pending requests</div>`;
-}
-
-function declineReq(id, senderUsername) {
-  ws.send(JSON.stringify({ type: 'request', id, username: senderUsername, status: 'decline' }));
-  document.getElementById(`req-${id}`)?.remove();
-  const remaining = document.querySelectorAll('.request-item').length;
-  if (!remaining) document.getElementById('requests-list').innerHTML = `<div class="empty-requests">No pending requests</div>`;
 }
 
 // ── UTILS ──
@@ -1345,9 +1311,6 @@ function showToast(msg) {
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2800);
 }
-
-// ── INIT ──
-renderContacts();
 </script>
 </body>
 </html>
