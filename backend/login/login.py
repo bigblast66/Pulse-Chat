@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 import os
 import redis.asyncio as redis
 import json
+import hashlib
 
 
 r=redis.Redis(host='localhost',port=6379,decode_responses=True)
@@ -383,8 +384,33 @@ async def requests_list(token:str):
         connection.close()
 
 
+
+@app.get("/requests_list_outgoing/{token}")
+async def requests_list(token:str):
+    query=("SELECT id,receiver,req_time FROM requests WHERE sender=%s")
+    connection=await get_connection("chat_db")
+    cursor=await connection.cursor()
+    try:
+        if await r.exists(f"blacklist:{token}"):
+            raise HTTPException(status_code=401,detail="invalid token")
+        payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+        await cursor.execute(query,(payload["username"],))
+        req_list=await cursor.fetchall()
+        return req_list
+    finally:
+        await cursor.close()
+        connection.close()
+
 user_socket={}
 socket_user={}
+
+
+
+#todo make outgoing req in frontend and send outgoing req list and sending a  req to a user also and taking back requests also
+#make friends table and decide how do u want it rn plan is user a user b date
+
+
+
 
 @app.websocket("/pulse/{token}")
 async def socket_manager(websocket: WebSocket,token:str):
@@ -395,7 +421,8 @@ async def socket_manager(websocket: WebSocket,token:str):
 
     try:
         if await r.exists(f"blacklist:{token}"):
-            raise HTTPException(status_code=401,detail="invalid token")
+            await websocket.close(code=4001)
+            return
         payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
 
 
@@ -414,41 +441,136 @@ async def socket_manager(websocket: WebSocket,token:str):
                 query1="DELETE FROM requests WHERE id=%s"
                 connection=await get_connection("chat_db")
                 cursor=await connection.cursor()
-                await cursor.execute(query1,(data["id"],))
-
-                if data["status"]=="accept":
-                    query2="INSERT INTO friends (user1,user2,friend_date) VALUES(%s,%s,%s)"
-                    friend_date=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-                    await cursor.execute(query2,(socket_user[websocket],data["username"],friend_date))
-                    await cursor.execute(query2,(data["username"],socket_user[websocket],friend_date))
-                    if user_socket.get(data["username"]) is not None:
-                        for soc in user_socket[data["username"]]:
-                            soc.send_text(json.dump({
+                try:
+                    await cursor.execute(query1,(data["id"],))
+                    if data["status"]=="accept":
+                        query2="INSERT INTO friends (user1,user2,friend_date) VALUES(%s,%s,%s)"
+                        friend_date=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                        chat_id=hashlib.sha256((payload["username"]+data["username"]).encode()).hexdigest()
+                        await cursor.execute(query2,(socket_user[websocket],data["username"],friend_date))
+                        await cursor.execute(query2,(data["username"],socket_user[websocket],friend_date))
+                        
+                        for soc in user_socket.get(data["username"],[]):
+                            await soc.send_text(json.dumps({
                                 "type":"request",
                                 "status":"accepted",
                                 "username":socket_user[websocket]
                             }))
-                else:
-                    if user_socket.get(data["username"]) is not None:
-                        for soc in user_socket[data["username"]]:
-                            soc.send_text(json.dump({
+                        for soc in user_socket.get(payload["username"],[]):
+                            await soc.send_text(json.dumps({
+                                "type":"request",
+                                "status":"accepted",
+                                "username":data["username"]
+                            }))
+                    else:
+                        
+                        for soc in user_socket.get(data["username"],[]):
+                            await soc.send_text(json.dumps({
                                 "type":"request",
                                 "status":"rejected",
                                 "username":socket_user[websocket]
                             }))
-
-                await connection.commit()
-                await cursor.execute()
-                await cursor.close()
-                connection.close()
-            
+                            #sending to the guy who rejected maybe multiple tabs
+                        for soc in user_socket.get(payload["username"],[]):
+                            await soc.send_text(json.dumps({
+                                "type":"request",
+                                "status":"rejected",
+                                "username":data["username"]
+                            }))
+                finally:
+                    await connection.commit()
+                    await cursor.close()
+                    connection.close()
+            elif data["type"]=="request_send":
+                query1="SELECT username FROM user_metadata WHERE username=%s"
+                query2="SELECT user1 FROM friends WHERE user1=%s AND user2=%s"
+                query3="SELECT sender,receiver FROM requests WHERE sender=%s AND receiver=%s"
+                if data["username"]==payload["username"]:
+                    continue
+                connection=await get_connection("chat_db")
+                cursor=await connection.cursor()
+                try:
+                    await cursor.execute(query3,(payload["username"],data["username"]))
+                    a=await cursor.fetchone()
+                    if a is not None:
+                        await websocket.send_text(json.dumps({
+                            "type":"request_send",
+                            "reason":"request_exists"
+                        }))
+                        continue
+                    await cursor.execute(query3,(data["username"],payload["username"]))
+                    d=await cursor.fetchone()
+                    if d is not None:
+                        await websocket.send_text(json.dumps({
+                            "type":"request_send",
+                            "reason":"request_from_user_exists"
+                        }))
+                        continue
+                    await cursor.execute(query2,(payload["username"],data["username"]))
+                    b=await cursor.fetchone()
+                    if b is not None:
+                        await websocket.send_text(json.dumps({
+                            "type":"request_send",
+                            "reason":"already_friend"
+                        }))
+                        continue
+                    await cursor.execute(query1,(data["username"],))
+                    c=await cursor.fetchone()
+                    if c is None:
+                        await websocket.send_text(json.dumps({
+                            "type":"request_send",
+                            "reason":"user_no_exist"
+                        }))
+                        continue
+                    req_time=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                    query4="INSERT INTO requests (sender,receiver,req_time) VALUES(%s,%s,%s)"
+                    query5="SELECT LAST_INSERT_ID()"
+                    
+                    await cursor.execute(query4,(payload["username"],data["username"],req_time))
+                    await connection.commit()
+                    await cursor.execute(query5)
+                    e=await cursor.fetchone()
+                    for soc in user_socket.get(payload["username"],[]):
+                        await soc.send_text(json.dumps({
+                            "type":"request_send",
+                            "reason":"success",
+                            "req_detail":[e[0],data["username"],req_time]
+                        }))
+                    for soc in user_socket.get(data["username"],[]):
+                        await soc.send_text(json.dumps({
+                            "type":"request_receive",
+                            "req_detail":[e[0],payload["username"],req_time]
+                        }))
+                finally:
+                    await cursor.close()
+                    connection.close()
+            elif data["type"]=="request_takeback":
+                query1="DELETE FROM requests WHERE id=%s"
+                connection=await get_connection("chat_db")
+                cursor=await connection.cursor()
+                try:
+                    await cursor.execute(query1,(data["id"],))
+                    await connection.commit()
+                    for soc in user_socket.get(payload["username"],[]):
+                        await soc.send_text(json.dumps({
+                            "type":"request_takeback",
+                            "req_detail":[data["id"],data["username"]]
+                        }))
+                    for soc in user_socket.get(data["username"],[]):
+                        await soc.send_text(json.dumps({
+                            "type":"request_takeback",
+                            "req_detail":[data["id"],payload["username"]]
+                        }))
+                finally:
+                    await cursor.close()
+                    connection.close()
 
     except WebSocketDisconnect:
         username=socket_user[websocket]
         if socket_user.get(websocket) is not None:
             del socket_user[websocket]
         if username is not None and user_socket.get(username) is not None:
-            if len(user_socket[websocket])==1:
+            if len(user_socket[username])==1:
                 del user_socket[username]
             else:
                 user_socket[username].remove(websocket)
