@@ -444,11 +444,13 @@ async def socket_manager(websocket: WebSocket,token:str):
                 try:
                     await cursor.execute(query1,(data["id"],))
                     if data["status"]=="accept":
-                        query2="INSERT INTO friends (user1,user2,friend_date) VALUES(%s,%s,%s)"
+                        query2="INSERT INTO friends (user1,user2,friend_date,chat_id) VALUES(%s,%s,%s,%s)"
                         friend_date=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-                        chat_id=hashlib.sha256((payload["username"]+data["username"]).encode()).hexdigest()
-                        await cursor.execute(query2,(socket_user[websocket],data["username"],friend_date))
-                        await cursor.execute(query2,(data["username"],socket_user[websocket],friend_date))
+                        x=payload["username"] if payload["username"]<data["username"] else data["username"]
+                        y=payload["username"] if payload["username"]>data["username"] else data["username"]
+                        chat_id=hashlib.sha256((x+y).encode()).hexdigest()
+                        await cursor.execute(query2,(socket_user[websocket],data["username"],friend_date,chat_id))
+                        await cursor.execute(query2,(data["username"],socket_user[websocket],friend_date,chat_id))
                         
                         for soc in user_socket.get(data["username"],[]):
                             await soc.send_text(json.dumps({
@@ -574,3 +576,39 @@ async def socket_manager(websocket: WebSocket,token:str):
                 del user_socket[username]
             else:
                 user_socket[username].remove(websocket)
+
+
+
+@app.get("/load_sidebar/{token}/{id}")
+async def load_sidebar(token:str,id: int):
+    connection=await get_connection("chat_db")
+    cursor=await connection.cursor()
+    try:
+        if await r.exists(f"blacklist:{token}"):
+            return
+        payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+
+        query = """
+                SELECT a.user2, a.chat_id, b.sender, b.content, b.sent_at, b.id as last_id,
+                    (
+                        SELECT COUNT(*) FROM chats c
+                        WHERE c.chat_id = a.chat_id
+                        AND c.id > COALESCE((
+                            SELECT last_read_id FROM read_receipts
+                            WHERE chat_id = a.chat_id AND username = %s
+                        ), 0)
+                        AND c.sender != %s
+                    ) as unread_count
+                FROM friends a
+                LEFT JOIN chats b ON b.id = (
+                    SELECT MAX(id) FROM chats WHERE chat_id = a.chat_id
+                )
+                WHERE a.user1 = %s AND (b.id < %s OR b.id IS NULL)
+                ORDER BY b.id DESC
+                LIMIT 50
+            """
+
+
+    finally:
+        await cursor.close()
+        connection.close()
