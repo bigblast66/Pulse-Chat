@@ -607,8 +607,12 @@ async def load_sidebar(token:str,id: int):
                 ORDER BY b.id DESC
                 LIMIT 50
             """
+        await cursor.execute(query,(payload["username"],payload["username"],payload["username"],id))
+        result=await cursor.fetchall()
+        return result
 
-
+    except:
+        pass
     finally:
         await cursor.close()
         connection.close()
