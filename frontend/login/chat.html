@@ -775,6 +775,7 @@ body {
 
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .toast-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
+.toast.danger .toast-dot { background: var(--danger); }
 </style>
 </head>
 <body>
@@ -791,7 +792,7 @@ body {
 
   <button class="nav-btn" title="Friend Requests" onclick="openRequests()">
     <svg viewBox="0 0 20 20" fill="none"><circle cx="8" cy="7" r="3.5" stroke="currentColor" stroke-width="1.5"/><path d="M2 17c0-3.314 2.686-6 6-6M14 11v6M11 14h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-    <span class="nav-badge"></span>
+    <span class="nav-badge" id="nav-badge"></span>
   </button>
 
   <button class="nav-btn" title="Settings" onclick="setNav(this)">
@@ -914,15 +915,14 @@ body {
       </button>
     </div>
 
-   
     <!-- send request -->
-<div style="padding:12px 16px;border-bottom:1px solid var(--border);">
-  <div style="display:flex;gap:8px;">
-    <input type="text" id="send-req-input" class="search-input" placeholder="Type username to add…" style="flex:1;padding-left:12px;" onkeydown="if(event.key==='Enter') sendRequest()">
-    <button class="req-accept" id="send-req-btn" onclick="sendRequest()">Send</button>
-  </div>
-  <div id="send-req-feedback" style="font-size:12px;margin-top:6px;display:none;"></div>
-</div>
+    <div style="padding:12px 16px;border-bottom:1px solid var(--border);">
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="send-req-input" class="search-input" placeholder="Type username to add…" style="flex:1;padding-left:12px;" onkeydown="if(event.key==='Enter') sendRequest()">
+        <button class="req-accept" id="send-req-btn" onclick="sendRequest()">Send</button>
+      </div>
+      <div id="send-req-feedback" style="font-size:12px;margin-top:6px;display:none;"></div>
+    </div>
 
     <!-- tabs -->
     <div class="req-tabs">
@@ -943,20 +943,20 @@ let ws;
 let currentUsername;
 let originalAbout = '';
 let activeReqTab = 'incoming';
+let requestCount = 0; // FIX: track count in variable, not DOM
 
 const avatarColors = [
   ['#3b4fd4','#c7cbf9'],['#2e7d5e','#a8d5c2'],['#8b3a3a','#f5c2c2'],
   ['#5a3e8a','#d0bbf5'],['#8a5a1a','#f5d8a0'],['#1a5a8a','#a0d4f5'],
 ];
 
-// mock contacts/messages — replace with backend later
 const contacts = [
-  { id:1, name:'Priya Sharma',  username:'priya.s',  status:'online',  preview:'sounds good!',            time:'2m',   unread:3, color:0 },
-  { id:2, name:'Rohan Mehta',   username:'rohan_m',  status:'online',  preview:'can u send the file?',    time:'18m',  unread:0, color:1 },
-  { id:3, name:'Sara Kim',      username:'sara.kim', status:'away',    preview:'ok see u tmrw',           time:'1h',   unread:1, color:2 },
-  { id:4, name:'Dev Patel',     username:'devp',     status:'offline', preview:'👍',                      time:'3h',   unread:0, color:3 },
-  { id:5, name:'Aisha Noor',    username:'aisha.n',  status:'online',  preview:'haha yeah exactly',       time:'yday', unread:0, color:4 },
-  { id:6, name:'Carlos Reyes',  username:'c.reyes',  status:'offline', preview:'let me check and get back',time:'yday',unread:0, color:5 },
+  { id:1, name:'Priya Sharma',  username:'priya.s',  status:'online',  preview:'sounds good!',             time:'2m',   unread:3, color:0 },
+  { id:2, name:'Rohan Mehta',   username:'rohan_m',  status:'online',  preview:'can u send the file?',     time:'18m',  unread:0, color:1 },
+  { id:3, name:'Sara Kim',      username:'sara.kim', status:'away',    preview:'ok see u tmrw',            time:'1h',   unread:1, color:2 },
+  { id:4, name:'Dev Patel',     username:'devp',     status:'offline', preview:'👍',                       time:'3h',   unread:0, color:3 },
+  { id:5, name:'Aisha Noor',    username:'aisha.n',  status:'online',  preview:'haha yeah exactly',        time:'yday', unread:0, color:4 },
+  { id:6, name:'Carlos Reyes',  username:'c.reyes',  status:'offline', preview:'let me check and get back', time:'yday', unread:0, color:5 },
 ];
 
 const mockMessages = {
@@ -991,7 +991,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const countRes = await fetch(`${API}/request_notification/${token}`);
   const countData = await countRes.json();
-  updateRequestBadge(countData.requests_count);
+  requestCount = countData.requests_count; // FIX: store in variable
+  updateRequestBadge(requestCount);
 
   connectWebSocket(token);
   renderContacts();
@@ -1004,31 +1005,65 @@ function connectWebSocket(token) {
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
 
+    // Someone sent YOU a request
     if (msg.type === 'request_receive') {
-  const badge = document.querySelector('.nav-badge');
-  const current = parseInt(badge.textContent) || 0;
-  updateRequestBadge(current + 1);
-  // if modal open on incoming tab, refresh it
-  if (document.getElementById('requests-modal').classList.contains('open') && activeReqTab === 'incoming') {
-    switchReqTab('incoming');
-  }
-}
-
-    if (msg.type === 'request_send') {
-  if (msg.reason === 'success') {
-    showReqFeedback('Request sent', true);
-    if (activeReqTab === 'outgoing') switchReqTab('outgoing');
-  } else if (msg.reason === 'request_exists') showReqFeedback('Request already sent to this user', false);
-  else if (msg.reason === 'already_friend')   showReqFeedback('Already friends', false);
-  else if (msg.reason === 'user_no_exist')    showReqFeedback('User not found', false);
-}
-
-    if (msg.type === 'request') {
-      if (msg.status === 'accepted') showToast(`${msg.username} accepted your request`);
+      requestCount++; // FIX: increment variable
+      updateRequestBadge(requestCount);
+      // refresh incoming tab if modal is open
+      const modalOpen = document.getElementById('requests-modal').classList.contains('open');
+      if (modalOpen && activeReqTab === 'incoming') {
+        switchReqTab('incoming');
+      }
     }
 
-    if(msg.type==='request_takeback'){
-      
+    // Feedback on YOUR outgoing request
+    if (msg.type === 'request_send') {
+      if (msg.reason === 'success') {
+        showReqFeedback('Request sent!', true);
+        // FIX: refresh outgoing tab if modal open
+        const modalOpen = document.getElementById('requests-modal').classList.contains('open');
+        if (modalOpen && activeReqTab === 'outgoing') {
+          switchReqTab('outgoing');
+        }
+      } else if (msg.reason === 'request_exists') showReqFeedback('Request already sent', false);
+      else if (msg.reason === 'already_friend')   showReqFeedback('Already friends', false);
+      else if (msg.reason === 'user_no_exist')    showReqFeedback('User not found', false);
+      else if (msg.reason === 'request_from_user_exists') showReqFeedback('This user already sent you a request', false);
+    }
+
+    // Someone accepted or rejected YOUR outgoing request
+    if (msg.type === 'request') {
+      const modalOpen = document.getElementById('requests-modal').classList.contains('open');
+      if (msg.status === 'accepted') {
+        showToast(`${msg.username} accepted your request!`);
+        // FIX: refresh outgoing tab so accepted request disappears
+        if (modalOpen && activeReqTab === 'outgoing') switchReqTab('outgoing');
+      } else if (msg.status === 'rejected') {
+        // FIX: was never handled before
+        showToast(`${msg.username} declined your request`, true);
+        if (modalOpen && activeReqTab === 'outgoing') switchReqTab('outgoing');
+      }
+    }
+
+    // FIX: request_takeback was completely empty before
+    if (msg.type === 'request_takeback') {
+      if (!msg.req_detail) return;
+      const [id, username] = msg.req_detail;
+
+      // remove from whichever list is visible
+      document.getElementById(`req-${id}`)?.remove();
+
+      // if someone took back THEIR request to us, decrement our badge
+      if (username !== currentUsername) {
+        requestCount = Math.max(0, requestCount - 1);
+        updateRequestBadge(requestCount);
+      }
+
+      // show empty state if list is now empty
+      if (!document.querySelectorAll('#requests-list .request-item').length) {
+        document.getElementById('requests-list').innerHTML =
+          `<div class="empty-requests">No ${activeReqTab} requests</div>`;
+      }
     }
   };
 
@@ -1162,7 +1197,7 @@ document.getElementById('profile-about').addEventListener('input', function() {
 
 function formatJoinDate(dateStr) {
   const date = new Date(dateStr);
-  return 'Joined ' + date.toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' });
+  return 'Joined on ' + date.toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' });
 }
 
 async function saveProfile() {
@@ -1193,6 +1228,7 @@ async function logout() {
 // ── REQUESTS ──
 async function openRequests() {
   document.getElementById('requests-modal').classList.add('open');
+  requestCount = 0; // FIX: reset variable not just badge
   updateRequestBadge(0);
   switchReqTab('incoming');
 }
@@ -1215,16 +1251,17 @@ function renderRequests(data, tab) {
     list.innerHTML = `<div class="empty-requests">No ${tab} requests</div>`;
     return;
   }
-  // backend returns tuples: [id, sender/receiver, req_time]
   list.innerHTML = data.map((r, i) => {
     const [bg, fg] = avatarColors[i % avatarColors.length];
     const displayName = r[1];
+    let temp=new Date(r[2]);
+    let date='Sent on '+temp.toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' });
     return `
     <div class="request-item" id="req-${r[0]}">
       <div class="request-avatar" style="background:${bg}20;color:${fg}">${displayName.slice(0,2).toUpperCase()}</div>
       <div class="request-info">
         <div class="request-name">${displayName}</div>
-        <div class="request-meta">${r[2]}</div>
+        <div class="request-meta">${date}</div>
       </div>
       <div class="request-btns">
         ${tab === 'incoming' ? `
@@ -1241,21 +1278,25 @@ function renderRequests(data, tab) {
 function acceptReq(id, senderUsername) {
   ws.send(JSON.stringify({ type:'request', id, username:senderUsername, status:'accept' }));
   document.getElementById(`req-${id}`)?.remove();
-  if (!document.querySelectorAll('.request-item').length)
+  requestCount = Math.max(0, requestCount - 1); 
+  updateRequestBadge(requestCount);
+  if (!document.querySelectorAll('#requests-list .request-item').length)
     document.getElementById('requests-list').innerHTML = `<div class="empty-requests">No incoming requests</div>`;
 }
 
 function declineReq(id, username) {
   ws.send(JSON.stringify({ type:'request', id, username, status:'decline' }));
   document.getElementById(`req-${id}`)?.remove();
-  if (!document.querySelectorAll('.request-item').length)
+  requestCount = Math.max(0, requestCount - 1);
+  updateRequestBadge(requestCount);
+  if (!document.querySelectorAll('#requests-list .request-item').length)
     document.getElementById('requests-list').innerHTML = `<div class="empty-requests">No ${activeReqTab} requests</div>`;
 }
 
 function takebackReq(id, username) {
-  ws.send(JSON.stringify({ type:'request_takeback', id, username, status:'decline' }));
+  ws.send(JSON.stringify({ type:'request_takeback', id, username }));
   document.getElementById(`req-${id}`)?.remove();
-  if (!document.querySelectorAll('.request-item').length)
+  if (!document.querySelectorAll('#requests-list .request-item').length)
     document.getElementById('requests-list').innerHTML = `<div class="empty-requests">No ${activeReqTab} requests</div>`;
 }
 
@@ -1273,7 +1314,6 @@ function showReqFeedback(msg, ok) {
   fb.style.display = 'block';
   fb.style.color = ok ? 'var(--success)' : 'var(--danger)';
   input.style.borderColor = ok ? 'rgba(76,175,138,0.5)' : 'rgba(224,92,92,0.5)';
-  // reset after 3s
   setTimeout(() => {
     fb.style.display = 'none';
     input.style.borderColor = '';
@@ -1283,13 +1323,13 @@ function showReqFeedback(msg, ok) {
 
 // ── BADGE ──
 function updateRequestBadge(count) {
-  const badge = document.querySelector('.nav-badge');
+  const badge = document.getElementById('nav-badge'); // FIX: use id not class
   if (count > 0) {
     badge.textContent = count > 99 ? '99+' : count;
-    badge.style.cssText = `display:unset;width:auto;min-width:16px;height:16px;border-radius:8px;font-size:9px;font-weight:600;color:#fff;padding:0 4px;top:4px;right:4px;`;
+    badge.style.cssText = `display:unset;width:auto;min-width:16px;height:16px;border-radius:8px;font-size:9px;font-weight:600;color:#fff;padding:0 4px;top:4px;right:4px;background:var(--danger);border:2px solid var(--surface);position:absolute;`;
   } else {
     badge.textContent = '';
-    badge.style.cssText = `display:none;width:7px;height:7px;border-radius:50%;padding:0;top:6px;right:6px;`;
+    badge.style.cssText = `display:none;`;
   }
 }
 
@@ -1305,9 +1345,10 @@ document.querySelectorAll('.overlay').forEach(o => {
   o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); });
 });
 
-function showToast(msg) {
+function showToast(msg, isDanger = false) {
   const t = document.getElementById('toast');
   document.getElementById('toast-msg').textContent = msg;
+  t.classList.toggle('danger', isDanger);
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2800);
 }
