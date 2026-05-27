@@ -404,6 +404,20 @@ async def requests_list(token:str):
 user_socket={}
 socket_user={}
 
+async def safe_send(soc, data: str):
+    """Send to a websocket, silently removing it if it's already closed."""
+    try:
+        await soc.send_text(data)
+    except Exception:
+        # Socket is closed/broken — remove it from the registry
+        username = socket_user.pop(soc, None)
+        if username and user_socket.get(username):
+            try:
+                user_socket[username].remove(soc)
+            except ValueError:
+                pass
+            if not user_socket[username]:
+                del user_socket[username]
 
 
 #todo make outgoing req in frontend and send outgoing req list and sending a  req to a user also and taking back requests also
@@ -451,15 +465,21 @@ async def socket_manager(websocket: WebSocket,token:str):
                         chat_id=hashlib.sha256((x+y).encode()).hexdigest()
                         await cursor.execute(query2,(socket_user[websocket],data["username"],friend_date,chat_id))
                         await cursor.execute(query2,(data["username"],socket_user[websocket],friend_date,chat_id))
+
+                        query6="INSERT INTO read_receipts (last_read_id,chat_id,username) VALUES(%s,%s,%s)"
+
+                        await cursor.execute(query6,(0,chat_id,payload["username"]))
+                        await cursor.execute(query6,(0,chat_id,data["username"]))
+
                         
                         for soc in user_socket.get(data["username"],[]):
-                            await soc.send_text(json.dumps({
+                            await safe_send(soc,json.dumps({
                                 "type":"request",
                                 "status":"accepted",
                                 "username":socket_user[websocket]
                             }))
                         for soc in user_socket.get(payload["username"],[]):
-                            await soc.send_text(json.dumps({
+                            await safe_send(soc,json.dumps({
                                 "type":"request",
                                 "status":"accepted",
                                 "username":data["username"]
@@ -467,14 +487,14 @@ async def socket_manager(websocket: WebSocket,token:str):
                     else:
                         
                         for soc in user_socket.get(data["username"],[]):
-                            await soc.send_text(json.dumps({
+                            await safe_send(soc,json.dumps({
                                 "type":"request",
                                 "status":"rejected",
                                 "username":socket_user[websocket]
                             }))
                             #sending to the guy who rejected maybe multiple tabs
                         for soc in user_socket.get(payload["username"],[]):
-                            await soc.send_text(json.dumps({
+                            await safe_send(soc,json.dumps({
                                 "type":"request",
                                 "status":"rejected",
                                 "username":data["username"]
@@ -495,7 +515,7 @@ async def socket_manager(websocket: WebSocket,token:str):
                     await cursor.execute(query3,(payload["username"],data["username"]))
                     a=await cursor.fetchone()
                     if a is not None:
-                        await websocket.send_text(json.dumps({
+                        await safe_send(websocket,json.dumps({
                             "type":"request_send",
                             "reason":"request_exists"
                         }))
@@ -503,7 +523,7 @@ async def socket_manager(websocket: WebSocket,token:str):
                     await cursor.execute(query3,(data["username"],payload["username"]))
                     d=await cursor.fetchone()
                     if d is not None:
-                        await websocket.send_text(json.dumps({
+                        await safe_send(websocket,json.dumps({
                             "type":"request_send",
                             "reason":"request_from_user_exists"
                         }))
@@ -511,7 +531,7 @@ async def socket_manager(websocket: WebSocket,token:str):
                     await cursor.execute(query2,(payload["username"],data["username"]))
                     b=await cursor.fetchone()
                     if b is not None:
-                        await websocket.send_text(json.dumps({
+                        await safe_send(websocket,json.dumps({
                             "type":"request_send",
                             "reason":"already_friend"
                         }))
@@ -519,7 +539,7 @@ async def socket_manager(websocket: WebSocket,token:str):
                     await cursor.execute(query1,(data["username"],))
                     c=await cursor.fetchone()
                     if c is None:
-                        await websocket.send_text(json.dumps({
+                        await safe_send(websocket,json.dumps({
                             "type":"request_send",
                             "reason":"user_no_exist"
                         }))
@@ -533,13 +553,13 @@ async def socket_manager(websocket: WebSocket,token:str):
                     await cursor.execute(query5)
                     e=await cursor.fetchone()
                     for soc in user_socket.get(payload["username"],[]):
-                        await soc.send_text(json.dumps({
+                        await safe_send(soc,json.dumps({
                             "type":"request_send",
                             "reason":"success",
                             "req_detail":[e[0],data["username"],req_time]
                         }))
                     for soc in user_socket.get(data["username"],[]):
-                        await soc.send_text(json.dumps({
+                        await safe_send(soc,json.dumps({
                             "type":"request_receive",
                             "req_detail":[e[0],payload["username"],req_time]
                         }))
@@ -554,16 +574,67 @@ async def socket_manager(websocket: WebSocket,token:str):
                     await cursor.execute(query1,(data["id"],))
                     await connection.commit()
                     for soc in user_socket.get(payload["username"],[]):
-                        await soc.send_text(json.dumps({
+                        await safe_send(soc,json.dumps({
                             "type":"request_takeback",
                             "req_detail":[data["id"],data["username"]]
                         }))
                     for soc in user_socket.get(data["username"],[]):
-                        await soc.send_text(json.dumps({
+                        await safe_send(soc,json.dumps({
                             "type":"request_takeback",
                             "req_detail":[data["id"],payload["username"]]
                         }))
                 finally:
+                    await cursor.close()
+                    connection.close()
+            elif data["type"]=="send_message":
+                query1="INSERT INTO chats (chat_id,sender,content,sent_at) VALUES(%s,%s,%s,%s)"
+                sent_time=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                connection=await get_connection("chat_db")
+                cursor=await connection.cursor()
+                try:
+                    await cursor.execute(query1,(data["chat_id"],payload["username"],data["content"],sent_time))
+                    query2="SELECT LAST_INSERT_ID()"
+                    await cursor.execute(query2)
+                    res=await cursor.fetchone()
+                    for soc in user_socket.get(payload["username"],[]):
+                        await safe_send(soc,json.dumps({
+                            "type":"sent_message",
+                            "content":data["content"],
+                            "chat_id":data["chat_id"],
+                            "sent_at":sent_time,
+                            "id":res[0],
+                            "sender":payload["username"]
+                        }))
+                    for soc in user_socket.get(data["username"],[]):
+                        await safe_send(soc,json.dumps({
+                            "type":"receive_message",
+                            "content":data["content"],
+                            "chat_id":data["chat_id"],
+                            "sent_at":sent_time,
+                            "id":res[0],
+                            "sender":payload["username"]
+                        }))
+                finally:
+                    await connection.commit()
+                    await cursor.close()
+                    connection.close()
+            elif data["type"]=="update_read_receipt":
+                connection=await get_connection("chat_db")
+                cursor=await connection.cursor()
+                try:
+                    
+                    query="UPDATE read_receipts SET last_read_id=%s WHERE chat_id=%s AND username=%s"
+                    await cursor.execute(query,(data["id"],data["chat_id"],payload["username"]))
+                    for soc in user_socket.get(payload["username"],[]):
+                        await safe_send(soc,json.dumps({
+                            "type":"updated_read_receipt",
+                            "id":data["id"],
+                            "chat_id":data["chat_id"]
+                        }))
+
+
+                finally:
+                    await connection.commit()
                     await cursor.close()
                     connection.close()
 
@@ -611,8 +682,49 @@ async def load_sidebar(token:str,id: int):
         result=await cursor.fetchall()
         return result
 
-    except:
-        pass
+    
     finally:
         await cursor.close()
         connection.close()
+
+@app.get("/load_chat/{token}/{id}/{chat_id}")
+async def load_sidebar(token:str,id: int,chat_id:str):
+    connection=await get_connection("chat_db")
+    cursor=await connection.cursor()
+    try:
+        if await r.exists(f"blacklist:{token}"):
+            return
+        payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+
+        query = """
+                SELECT * FROM chats
+                WHERE chat_id=%s AND id<%s
+                ORDER BY id DESC
+                LIMIT 50
+            """
+        await cursor.execute(query,(chat_id,id))
+        
+        result=await cursor.fetchall()
+        return result
+
+    
+    finally:
+        await cursor.close()
+        connection.close()
+
+# @app.patch("/update_read_receipt/{token}/{id}/{chat_id}")
+# async def update_read_receipt(token:str,chat_id:str,id:int):
+#     connection=await get_connection("chat_db")
+#     cursor=await connection.cursor()
+#     try:
+#         if await r.exists(f"blacklist:{token}"):
+#             return
+#         payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+
+#         query="UPDATE read_receipts SET last_read_id=%s WHERE chat_id=%s AND username=%s"
+
+#         await cursor.execute(query,(id,chat_id,payload["username"]))
+#     finally:
+#         await connection.commit()
+#         await cursor.close()
+#         connection.close()
