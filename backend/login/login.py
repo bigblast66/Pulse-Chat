@@ -728,3 +728,37 @@ async def load_sidebar(token:str,id: int,chat_id:str):
 #         await connection.commit()
 #         await cursor.close()
 #         connection.close()
+
+@app.get("/search_sidebar/{token}/{input}")
+async def search_sidebar(token:str,input:str):
+    connection=await get_connection("chat_db")
+    cursor=await connection.cursor()
+    try:
+        if await r.exists(f"blacklist:{token}"):
+            return
+        payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+
+        query="SELECT user2 FROM friends WHERE user1=%s AND user2 LIKE %s"
+        await cursor.execute(query,(payload["username"],f"{input.strip()}%"))
+        results=await cursor.fetchall()
+        return results
+    finally:
+        await cursor.close()
+        connection.close()
+
+@app.get("/search_chat/{token}/{chat_id}/{input}/{id}")
+async def search_chat(token:str,chat_id:str,input:str,id:int):
+    connection=await get_connection("chat_db")
+    cursor=await connection.cursor()
+    try:
+        if await r.exists(f"blacklist:{token}"):
+            return
+        payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+
+        query="SELECT id,sender,content,sent_at FROM chats WHERE content LIKE %s AND id<%s ORDER BY id DESC LIMIT 50"
+        await cursor.execute(query,(f"%{input.strip()}%",id))
+        results=await cursor.fetchall()
+        return results
+    finally:
+        await cursor.close()
+        connection.close()
