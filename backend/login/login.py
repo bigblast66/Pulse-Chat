@@ -588,10 +588,21 @@ async def socket_manager(websocket: WebSocket,token:str):
                     connection.close()
             elif data["type"]=="send_message":
                 query1="INSERT INTO chats (chat_id,sender,content,sent_at) VALUES(%s,%s,%s,%s)"
+                query2="SELECT user1 FROM friends WHERE chat_id=%s"
+
                 sent_time=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
                 connection=await get_connection("chat_db")
                 cursor=await connection.cursor()
                 try:
+                    await cursor.execute(query2,(data["chat_id"],))
+                    res=await cursor.fetchall()
+                    members={res[0][0],res[1][0]}
+                    if payload["username"]==data["username"]:
+                        continue
+                    if payload["username"] not in members:
+                        continue
+                    if data["username"] not in members:
+                        continue
                     await cursor.execute(query1,(data["chat_id"],payload["username"],data["content"],sent_time))
                     query2="SELECT LAST_INSERT_ID()"
                     await cursor.execute(query2)
@@ -700,6 +711,31 @@ async def load_sidebar(token:str,id: int,chat_id:str):
                 SELECT * FROM chats
                 WHERE chat_id=%s AND id<%s
                 ORDER BY id DESC
+                LIMIT 50
+            """
+        await cursor.execute(query,(chat_id,id))
+        
+        result=await cursor.fetchall()
+        return result
+
+    
+    finally:
+        await cursor.close()
+        connection.close()
+
+@app.get("/load_chat_after/{token}/{id}/{chat_id}")
+async def load_chat_after(token: str, id: int, chat_id: str):
+    connection=await get_connection("chat_db")
+    cursor=await connection.cursor()
+    try:
+        if await r.exists(f"blacklist:{token}"):
+            return
+        payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+
+        query = """
+                SELECT * FROM chats
+                WHERE chat_id=%s AND id>%s
+                ORDER BY id ASC
                 LIMIT 50
             """
         await cursor.execute(query,(chat_id,id))
