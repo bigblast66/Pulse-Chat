@@ -233,20 +233,6 @@ body {
   position: relative;
 }
 
-.contact-avatar .dot {
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  border: 2px solid var(--surface);
-}
-
-.dot.online { background: var(--online); }
-.dot.away { background: var(--away); }
-.dot.offline { background: var(--text-dim); }
-
 .contact-info { flex: 1; min-width: 0; }
 
 .contact-name {
@@ -380,6 +366,21 @@ body {
 .messages-area::-webkit-scrollbar { width: 4px; }
 .messages-area::-webkit-scrollbar-track { background: transparent; }
 .messages-area::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 2px; }
+
+.load-more-btn {
+  align-self: center;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: 'DM Sans', sans-serif;
+  padding: 5px 14px;
+  cursor: pointer;
+  margin-bottom: 8px;
+  transition: background 0.15s;
+}
+.load-more-btn:hover { background: var(--surface3); }
 
 .msg-date-divider {
   text-align: center;
@@ -776,6 +777,44 @@ body {
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .toast-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
 .toast.danger .toast-dot { background: var(--danger); }
+
+/* CHAT SEARCH PANEL */
+.chat-search-bar {
+  display: none;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.chat-search-bar.visible { display: flex; }
+.chat-search-bar input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.chat-search-bar input:focus { border-color: var(--border2); }
+.chat-search-bar input::placeholder { color: var(--text-dim); }
+.chat-search-nav { display: flex; align-items: center; gap: 4px; }
+.chat-search-count { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+.search-highlight {
+  background: rgba(91,106,240,0.35);
+  border-radius: 2px;
+  color: #fff;
+}
+.msg-row.search-match .msg-bubble { outline: 1px solid var(--accent); outline-offset: 2px; border-radius: 12px; }
+
+/* SIDEBAR SEARCH RESULTS */
+.sidebar-section-label.search-label { color: var(--accent); }
+.contact-item.search-result-item .contact-preview { color: var(--text-muted); }
 </style>
 </head>
 <body>
@@ -816,7 +855,7 @@ body {
     <div class="sidebar-title">Messages</div>
     <div class="search-wrap">
       <svg viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-      <input class="search-input" type="text" placeholder="Search conversations…">
+      <input class="search-input" type="text" id="sidebar-search-input" placeholder="Search conversations…" oninput="onSidebarSearch(this.value)">
     </div>
   </div>
   <div class="sidebar-section-label">Recent</div>
@@ -841,11 +880,28 @@ body {
         <div class="chat-header-status" id="chat-status"></div>
       </div>
       <div class="chat-header-actions">
-        <button class="icon-btn" title="Search in chat">
+        <button class="icon-btn" title="Search in chat" onclick="toggleChatSearch()">
           <svg viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
         </button>
         <button class="icon-btn" title="More options">
           <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="4" r="1" fill="currentColor"/><circle cx="8" cy="8" r="1" fill="currentColor"/><circle cx="8" cy="12" r="1" fill="currentColor"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- CHAT SEARCH BAR -->
+    <div class="chat-search-bar" id="chat-search-bar">
+      <input type="text" id="chat-search-input" placeholder="Search messages…" oninput="onChatSearch(this.value)" onkeydown="chatSearchKey(event)">
+      <div class="chat-search-nav">
+        <span class="chat-search-count" id="chat-search-count"></span>
+        <button class="icon-btn" onclick="chatSearchStep(-1)" title="Previous">
+          <svg viewBox="0 0 16 16" fill="none"><path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="icon-btn" onclick="chatSearchStep(1)" title="Next">
+          <svg viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="icon-btn" onclick="closeChatSearch()" title="Close">
+          <svg viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         </button>
       </div>
     </div>
@@ -915,7 +971,6 @@ body {
       </button>
     </div>
 
-    <!-- send request -->
     <div style="padding:12px 16px;border-bottom:1px solid var(--border);">
       <div style="display:flex;gap:8px;">
         <input type="text" id="send-req-input" class="search-input" placeholder="Type username to add…" style="flex:1;padding-left:12px;" onkeydown="if(event.key==='Enter') sendRequest()">
@@ -924,7 +979,6 @@ body {
       <div id="send-req-feedback" style="font-size:12px;margin-top:6px;display:none;"></div>
     </div>
 
-    <!-- tabs -->
     <div class="req-tabs">
       <button class="req-tab active" id="tab-incoming" onclick="switchReqTab('incoming')">Incoming</button>
       <button class="req-tab" id="tab-outgoing" onclick="switchReqTab('outgoing')">Outgoing</button>
@@ -943,60 +997,403 @@ let ws;
 let currentUsername;
 let originalAbout = '';
 let activeReqTab = 'incoming';
-let requestCount = 0; // FIX: track count in variable, not DOM
+let requestCount = 0;
+
+// ── SIDEBAR STATE ──
+// Map of chat_id -> { username, chat_id, sender, content, sent_at, last_id, unread_count, colorIdx }
+const sidebarMap = new Map();
+let sidebarOldestId = 999999999;
+let sidebarLoadingMore = false;
+let sidebarAllLoaded = false;
+
+// ── ACTIVE CHAT STATE ──
+// { username, chat_id, colorIdx, messages: [{id,sender,content,sent_at}], oldestId, hasMore }
+let activeChat = null;
 
 const avatarColors = [
   ['#3b4fd4','#c7cbf9'],['#2e7d5e','#a8d5c2'],['#8b3a3a','#f5c2c2'],
   ['#5a3e8a','#d0bbf5'],['#8a5a1a','#f5d8a0'],['#1a5a8a','#a0d4f5'],
 ];
 
-const contacts = [
-  { id:1, name:'Priya Sharma',  username:'priya.s',  status:'online',  preview:'sounds good!',             time:'2m',   unread:3, color:0 },
-  { id:2, name:'Rohan Mehta',   username:'rohan_m',  status:'online',  preview:'can u send the file?',     time:'18m',  unread:0, color:1 },
-  { id:3, name:'Sara Kim',      username:'sara.kim', status:'away',    preview:'ok see u tmrw',            time:'1h',   unread:1, color:2 },
-  { id:4, name:'Dev Patel',     username:'devp',     status:'offline', preview:'👍',                       time:'3h',   unread:0, color:3 },
-  { id:5, name:'Aisha Noor',    username:'aisha.n',  status:'online',  preview:'haha yeah exactly',        time:'yday', unread:0, color:4 },
-  { id:6, name:'Carlos Reyes',  username:'c.reyes',  status:'offline', preview:'let me check and get back', time:'yday', unread:0, color:5 },
-];
+function getColorIdx(username) {
+  let h = 0;
+  for (let i = 0; i < username.length; i++) h = (h * 31 + username.charCodeAt(i)) & 0xfffffff;
+  return h % avatarColors.length;
+}
 
-const mockMessages = {
-  1:[
-    { from:'them', text:'hey! are you free this evening?', time:'6:30 PM' },
-    { from:'me',   text:'yeah should be free after 7',     time:'6:31 PM' },
-    { from:'them', text:"perfect, let's catch up then",    time:'6:31 PM' },
-    { from:'me',   text:'sounds good!',                    time:'6:32 PM' },
-  ],
-  2:[
-    { from:'me',   text:'hey rohan, can you send the design files?', time:'11:00 AM' },
-    { from:'them', text:'sure, one sec',                             time:'11:02 AM' },
-    { from:'them', text:'can u send the file?',                      time:'11:05 AM' },
-  ],
-};
+function initials(name) { return (name || '??').slice(0, 2).toUpperCase(); }
 
-let activeContact = null;
+function formatTime(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z');
+  const now = new Date();
+  const diffMin = Math.floor((now - d) / 60000);
+  if (diffMin < 1) return 'now';
+  if (diffMin < 60) return `${diffMin}m`;
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24) return `${diffH}h`;
+  const diffD = Math.floor(diffH / 24);
+  if (diffD === 1) return 'yday';
+  if (diffD < 7) return `${diffD}d`;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function formatMsgTime(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z');
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatMsgDate(dateStr) {
+  if (!dateStr) return 'Today';
+  const d = new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z');
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffD = Math.round((today - msgDay) / 86400000);
+  if (diffD === 0) return 'Today';
+  if (diffD === 1) return 'Yesterday';
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 
 // ── INIT ──
 document.addEventListener('DOMContentLoaded', async () => {
   const token = localStorage.getItem('token');
 
-  const sessionRes = await fetch(`${API}/session/${token}`);
+  const sessionRes = await fetch(`${API}/session`,{credentials:'include'});
   if (!sessionRes.ok) { location.href = './index.html'; return; }
 
-  const meRes = await fetch(`${API}/me/${token}`);
+  const meRes = await fetch(`${API}/me`,{credentials:'include'});
   const me = await meRes.json();
   if (!me) return;
 
   currentUsername = me.username;
-  document.querySelector('.nav-avatar').childNodes[0].textContent = me.username.slice(0,2).toUpperCase();
+  document.querySelector('.nav-avatar').childNodes[0].textContent = me.username.slice(0, 2).toUpperCase();
 
-  const countRes = await fetch(`${API}/request_notification/${token}`);
+  const countRes = await fetch(`${API}/request_notification`,{credentials:'include'});
   const countData = await countRes.json();
-  requestCount = countData.requests_count; // FIX: store in variable
+  requestCount = countData.requests_count;
   updateRequestBadge(requestCount);
 
+  await loadSidebar();
   connectWebSocket(token);
-  renderContacts();
+
+  document.getElementById('contact-list').addEventListener('scroll', onSidebarScroll);
+
+  // Restore chat from URL on refresh
+  const params = new URLSearchParams(window.location.search);
+  const chatIdFromUrl = params.get('c');
+  if (chatIdFromUrl) {
+    // Wait until sidebar is populated then open
+    const tryOpen = () => {
+      if (sidebarMap.has(chatIdFromUrl)) openChat(chatIdFromUrl);
+    };
+    tryOpen();
+    // If not loaded yet (e.g. paginated), try again after first render
+    setTimeout(tryOpen, 400);
+  }
 });
+
+// ── SIDEBAR LOADING ──
+async function loadSidebar() {
+  if (sidebarLoadingMore || sidebarAllLoaded) return;
+  sidebarLoadingMore = true;
+  const token = localStorage.getItem('token');
+  try {
+    const res = await fetch(`${API}/load_sidebar/${sidebarOldestId}`,{credentials:'include'});
+    if (!res.ok) return;
+    const rows = await res.json();
+    if (!rows || !rows.length) { sidebarAllLoaded = true; return; }
+
+    for (const row of rows) {
+      // [user2, chat_id, sender, content, sent_at, last_id, unread_count]
+      const [username, chat_id, sender, content, sent_at, last_id, unread_count] = row;
+      if (!sidebarMap.has(chat_id)) {
+        sidebarMap.set(chat_id, {
+          username, chat_id, sender, content, sent_at,
+          last_id: last_id ?? 0,
+          unread_count: unread_count ?? 0,
+          colorIdx: getColorIdx(username)
+        });
+      }
+    }
+
+    // Update oldest id — rows ordered by last_id DESC, pick smallest non-null
+    const validIds = rows.map(r => r[5]).filter(id => id !== null);
+    if (validIds.length) sidebarOldestId = Math.min(...validIds);
+    if (rows.length < 50) sidebarAllLoaded = true;
+
+    renderSidebar();
+  } finally {
+    sidebarLoadingMore = false;
+  }
+}
+
+function onSidebarScroll() {
+  const el = document.getElementById('contact-list');
+  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 40) loadSidebar();
+}
+
+function renderSidebar() {
+  const list = document.getElementById('contact-list');
+  const sorted = [...sidebarMap.values()].sort((a, b) => (b.last_id || 0) - (a.last_id || 0));
+
+  if (!sorted.length) {
+    list.innerHTML = `<div style="padding:24px 12px;text-align:center;color:var(--text-dim);font-size:13px">No conversations yet</div>`;
+    return;
+  }
+
+  list.innerHTML = sorted.map(c => {
+    const [bg, fg] = avatarColors[c.colorIdx];
+    const isActive = activeChat && activeChat.chat_id === c.chat_id;
+    const previewPrefix = c.sender === currentUsername ? 'You: ' : '';
+    const preview = c.content ? escapeHtml(c.content) : '—';
+    return `
+    <div class="contact-item${isActive ? ' active' : ''}" id="sidebar-${c.chat_id}" onclick="openChat('${c.chat_id}')">
+      <div class="contact-avatar" style="background:${bg}20;color:${fg}">${initials(c.username)}</div>
+      <div class="contact-info">
+        <div class="contact-name">${escapeHtml(c.username)}</div>
+        <div class="contact-preview">${previewPrefix}${preview}</div>
+      </div>
+      <div class="contact-meta">
+        <span class="contact-time">${formatTime(c.sent_at)}</span>
+        ${c.unread_count > 0 ? `<span class="unread-badge">${c.unread_count}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Upsert a sidebar entry when a real-time message comes in
+function upsertSidebarEntry(chat_id, username, sender, content, sent_at, msg_id, isIncoming) {
+  if (sidebarMap.has(chat_id)) {
+    const e = sidebarMap.get(chat_id);
+    e.sender = sender;
+    e.content = content;
+    e.sent_at = sent_at;
+    e.last_id = msg_id;
+    if (isIncoming && !(activeChat && activeChat.chat_id === chat_id)) {
+      e.unread_count = (e.unread_count || 0) + 1;
+    }
+  } else {
+    // New friend just messaged — insert fresh entry
+    sidebarMap.set(chat_id, {
+      username, chat_id, sender, content, sent_at,
+      last_id: msg_id,
+      unread_count: isIncoming ? 1 : 0,
+      colorIdx: getColorIdx(username)
+    });
+  }
+  renderSidebar();
+}
+
+// ── OPEN CHAT ──
+async function openChat(chat_id) {
+  const entry = sidebarMap.get(chat_id);
+  if (!entry) return;
+
+  // If already open in this chat, do nothing
+  if (activeChat && activeChat.chat_id === chat_id) return;
+
+  // Push chat_id into URL so refresh restores it
+  history.pushState({ chat_id }, '', `?c=${chat_id}`);
+
+  activeChat = {
+    username: entry.username,
+    chat_id,
+    colorIdx: entry.colorIdx,
+    messages: [],
+    oldestId: 999999999,
+    hasMore: true,
+    hasNewer: false
+  };
+
+  // Clear unread for this entry
+  entry.unread_count = 0;
+  renderSidebar();
+
+  // Show chat panel
+  document.getElementById('empty-state').style.display = 'none';
+  const ca = document.getElementById('chat-area');
+  ca.style.display = 'flex';
+  ca.classList.add('visible');
+
+  // Set header
+  const [bg, fg] = avatarColors[entry.colorIdx];
+  const avatar = document.getElementById('chat-avatar');
+  avatar.textContent = initials(entry.username);
+  avatar.style.cssText = `background:${bg}20;color:${fg};width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;`;
+  document.getElementById('chat-name').textContent = entry.username;
+  document.getElementById('chat-status').textContent = '';
+
+  // Load first batch of messages
+  document.getElementById('messages-area').innerHTML = '';
+  await loadMoreMessages();
+
+  const area = document.getElementById('messages-area');
+  area.scrollTop = area.scrollHeight;
+
+  // Mark as read
+  if (activeChat.messages.length) {
+    const latestId = activeChat.messages[activeChat.messages.length - 1].id;
+    sendReadReceipt(chat_id, latestId);
+  }
+
+  document.getElementById('msg-input').focus();
+}
+
+// ── LOAD MESSAGES (paginated) ──
+async function loadMoreMessages() {
+  if (!activeChat || !activeChat.hasMore) return;
+  const token = localStorage.getItem('token');
+  const { chat_id, oldestId } = activeChat;
+
+  const res = await fetch(`${API}/load_chat/${oldestId}/${chat_id}`,{credentials:'include'});
+  if (!res.ok) return;
+  const rows = await res.json();
+  // rows: [id, chat_id, sender, content, sent_at] ordered by id DESC
+  if (!rows || !rows.length) {
+    activeChat.hasMore = false;
+    renderMessages();
+    return;
+  }
+
+  // Reverse to get chronological order, then prepend to existing messages
+  const newMsgs = rows
+    .map(r => ({ id: r[0], chat_id: r[1], sender: r[2], content: r[3], sent_at: r[4] }))
+    .reverse();
+
+  activeChat.messages = [...newMsgs, ...activeChat.messages];
+  // Smallest id among this batch = oldest we've seen
+  activeChat.oldestId = rows[rows.length - 1][0];
+  if (rows.length < 50) activeChat.hasMore = false;
+
+  renderMessages();
+}
+
+async function loadOlderMessages() {
+  if (!activeChat || !activeChat.hasMore) return;
+  const area = document.getElementById('messages-area');
+  const prevHeight = area.scrollHeight;
+  await loadMoreMessages();
+  // Keep user's scroll position
+  area.scrollTop = area.scrollHeight - prevHeight;
+}
+
+// ── RENDER MESSAGES ──
+function renderMessages(scrollToBottom = false) {
+  if (!activeChat) return;
+  const area = document.getElementById('messages-area');
+  const wasAtBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 60;
+
+  let html = '';
+
+  if (activeChat.hasMore) {
+    html += `<button class="load-more-btn" onclick="loadOlderMessages()">Load older messages</button>`;
+  }
+
+  let lastDateLabel = '';
+  const [bg, fg] = avatarColors[activeChat.colorIdx];
+
+  for (const m of activeChat.messages) {
+    const dateLabel = formatMsgDate(m.sent_at);
+    if (dateLabel !== lastDateLabel) {
+      html += `<div class="msg-date-divider">${dateLabel}</div>`;
+      lastDateLabel = dateLabel;
+    }
+    const isMine = m.sender === currentUsername;
+    const theirAvatar = `<div class="msg-avatar-sm" style="background:${bg}20;color:${fg}">${initials(activeChat.username)}</div>`;
+    html += `
+    <div class="msg-row ${isMine ? 'mine' : ''}" data-id="${m.id}">
+      ${!isMine ? theirAvatar : ''}
+      <div>
+        <div class="msg-bubble">${escapeHtml(m.content)}</div>
+        <div class="msg-time">${formatMsgTime(m.sent_at)}</div>
+      </div>
+    </div>`;
+  }
+
+  if (!activeChat.messages.length && !activeChat.hasMore) {
+    html = `<div style="text-align:center;color:var(--text-dim);font-size:13px;margin-top:40px">No messages yet. Say hi!</div>`;
+  }
+
+  if (activeChat.hasNewer) {
+    html += `<button class="load-more-btn" onclick="loadNewerMessages()">Load newer messages</button>`;
+  }
+
+  area.innerHTML = html;
+
+  if (scrollToBottom || wasAtBottom) {
+    area.scrollTop = area.scrollHeight;
+  }
+}
+
+async function loadNewerMessages() {
+  if (!activeChat || !activeChat.hasNewer) return;
+  const token = localStorage.getItem('token');
+  const { chat_id, messages } = activeChat;
+  const newestId = messages[messages.length - 1].id;
+
+  const res = await fetch(`${API}/load_chat_after/${newestId}/${chat_id}`,{credentials:'include'});
+  if (!res.ok) return;
+  const rows = await res.json();
+  if (!rows || !rows.length) { activeChat.hasNewer = false; renderMessages(); return; }
+
+  // rows come ASC (oldest first) — already correct order to append
+  const newMsgs = rows.map(r => ({ id: r[0], chat_id: r[1], sender: r[2], content: r[3], sent_at: r[4] }));
+  const area = document.getElementById('messages-area');
+  const prevDistFromBottom = area.scrollHeight - area.scrollTop - area.clientHeight;
+
+  activeChat.messages = [...activeChat.messages, ...newMsgs];
+  if (newMsgs.length < 50) activeChat.hasNewer = false;
+
+  renderMessages();
+  // Keep distance from bottom the same
+  area.scrollTop = area.scrollHeight - area.clientHeight - prevDistFromBottom;
+}
+
+// Scroll handler — load older at top, load newer at bottom
+document.getElementById('messages-area').addEventListener('scroll', function () {
+  if (this.scrollTop < 40 && activeChat?.hasMore) loadOlderMessages();
+  if (this.scrollHeight - this.scrollTop - this.clientHeight < 40 && activeChat?.hasNewer) loadNewerMessages();
+});
+
+// ── SEND MESSAGE ──
+function sendMessage() {
+  const input = document.getElementById('msg-input');
+  const text = input.value.trim();
+  if (!text || !activeChat || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+  ws.send(JSON.stringify({
+    type: 'send_message',
+    chat_id: activeChat.chat_id,
+    username: activeChat.username,
+    content: text
+  }));
+
+  input.value = '';
+  input.style.height = 'auto';
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+document.getElementById('msg-input').addEventListener('input', function () {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+});
+
+// ── READ RECEIPT ──
+function sendReadReceipt(chat_id, msg_id) {
+  if (!ws || ws.readyState !== WebSocket.OPEN || !msg_id) return;
+  ws.send(JSON.stringify({ type: 'update_read_receipt', id: msg_id, chat_id }));
+}
 
 // ── WEBSOCKET ──
 function connectWebSocket(token) {
@@ -1005,61 +1402,81 @@ function connectWebSocket(token) {
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
 
-    // Someone sent YOU a request
-    if (msg.type === 'request_receive') {
-      requestCount++; // FIX: increment variable
-      updateRequestBadge(requestCount);
-      // refresh incoming tab if modal is open
-      const modalOpen = document.getElementById('requests-modal').classList.contains('open');
-      if (modalOpen && activeReqTab === 'incoming') {
-        switchReqTab('incoming');
+    // ── OWN MESSAGE ECHOED BACK ──
+    if (msg.type === 'sent_message') {
+      const newMsg = { id: msg.id || Date.now(), chat_id: msg.chat_id, sender: msg.sender, content: msg.content, sent_at: msg.sent_at };
+      if (activeChat && activeChat.chat_id === msg.chat_id) {
+        activeChat.messages.push(newMsg);
+        renderMessages(true);
+        sendReadReceipt(msg.chat_id, newMsg.id);
+      }
+      const entry = sidebarMap.get(msg.chat_id);
+      upsertSidebarEntry(msg.chat_id, entry ? entry.username : activeChat?.username, msg.sender, msg.content, msg.sent_at, newMsg.id, false);
+    }
+
+    // ── INCOMING MESSAGE FROM OTHER USER ──
+    if (msg.type === 'receive_message') {
+      const newMsg = { id: msg.id || Date.now(), chat_id: msg.chat_id, sender: msg.sender, content: msg.content, sent_at: msg.sent_at };
+      if (activeChat && activeChat.chat_id === msg.chat_id) {
+        activeChat.messages.push(newMsg);
+        renderMessages(true);
+        // Chat is open — immediately mark as read
+        sendReadReceipt(msg.chat_id, newMsg.id);
+      }
+      upsertSidebarEntry(msg.chat_id, msg.sender, msg.sender, msg.content, msg.sent_at, newMsg.id, true);
+    }
+
+    // ── READ RECEIPT CONFIRMED (fires on all tabs for the same user) ──
+    if (msg.type === 'updated_read_receipt') {
+      if (sidebarMap.has(msg.chat_id)) {
+        sidebarMap.get(msg.chat_id).unread_count = 0;
+        renderSidebar();
       }
     }
 
-    // Feedback on YOUR outgoing request
+    // ── REQUESTS ──
+    if (msg.type === 'request_receive') {
+      requestCount++;
+      updateRequestBadge(requestCount);
+      const modalOpen = document.getElementById('requests-modal').classList.contains('open');
+      if (modalOpen && activeReqTab === 'incoming') switchReqTab('incoming');
+    }
+
     if (msg.type === 'request_send') {
       if (msg.reason === 'success') {
         showReqFeedback('Request sent!', true);
-        // FIX: refresh outgoing tab if modal open
         const modalOpen = document.getElementById('requests-modal').classList.contains('open');
-        if (modalOpen && activeReqTab === 'outgoing') {
-          switchReqTab('outgoing');
-        }
+        if (modalOpen && activeReqTab === 'outgoing') switchReqTab('outgoing');
       } else if (msg.reason === 'request_exists') showReqFeedback('Request already sent', false);
       else if (msg.reason === 'already_friend')   showReqFeedback('Already friends', false);
       else if (msg.reason === 'user_no_exist')    showReqFeedback('User not found', false);
       else if (msg.reason === 'request_from_user_exists') showReqFeedback('This user already sent you a request', false);
     }
 
-    // Someone accepted or rejected YOUR outgoing request
     if (msg.type === 'request') {
       const modalOpen = document.getElementById('requests-modal').classList.contains('open');
       if (msg.status === 'accepted') {
         showToast(`${msg.username} accepted your request!`);
-        // FIX: refresh outgoing tab so accepted request disappears
         if (modalOpen && activeReqTab === 'outgoing') switchReqTab('outgoing');
+        // Reload sidebar so new friend appears
+        sidebarAllLoaded = false;
+        sidebarOldestId = 999999999;
+        sidebarMap.clear();
+        loadSidebar();
       } else if (msg.status === 'rejected') {
-        // FIX: was never handled before
         showToast(`${msg.username} declined your request`, true);
         if (modalOpen && activeReqTab === 'outgoing') switchReqTab('outgoing');
       }
     }
 
-    // FIX: request_takeback was completely empty before
     if (msg.type === 'request_takeback') {
       if (!msg.req_detail) return;
       const [id, username] = msg.req_detail;
-
-      // remove from whichever list is visible
       document.getElementById(`req-${id}`)?.remove();
-
-      // if someone took back THEIR request to us, decrement our badge
       if (username !== currentUsername) {
         requestCount = Math.max(0, requestCount - 1);
         updateRequestBadge(requestCount);
       }
-
-      // show empty state if list is now empty
       if (!document.querySelectorAll('#requests-list .request-item').length) {
         document.getElementById('requests-list').innerHTML =
           `<div class="empty-requests">No ${activeReqTab} requests</div>`;
@@ -1070,109 +1487,9 @@ function connectWebSocket(token) {
   ws.onclose = () => setTimeout(() => connectWebSocket(token), 3000);
 }
 
-// ── CONTACTS ──
-function initials(name) { return name.slice(0,2).toUpperCase(); }
-
-function renderContacts() {
-  const list = document.getElementById('contact-list');
-  list.innerHTML = contacts.map(c => {
-    const [bg, fg] = avatarColors[c.color];
-    return `
-    <div class="contact-item" id="contact-${c.id}" onclick="openChat(${c.id})">
-      <div class="contact-avatar" style="background:${bg}20;color:${fg}">
-        ${initials(c.name)}
-        <span class="dot ${c.status}"></span>
-      </div>
-      <div class="contact-info">
-        <div class="contact-name">${c.name}</div>
-        <div class="contact-preview">${c.preview}</div>
-      </div>
-      <div class="contact-meta">
-        <span class="contact-time">${c.time}</span>
-        ${c.unread ? `<span class="unread-badge">${c.unread}</span>` : ''}
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// ── CHAT ──
-function openChat(id) {
-  activeContact = contacts.find(c => c.id === id);
-  document.querySelectorAll('.contact-item').forEach(el => el.classList.remove('active'));
-  document.getElementById(`contact-${id}`)?.classList.add('active');
-
-  const [bg, fg] = avatarColors[activeContact.color];
-  const avatar = document.getElementById('chat-avatar');
-  avatar.textContent = initials(activeContact.name);
-  avatar.style.cssText = `background:${bg}20;color:${fg};width:32px;height:32px;`;
-
-  document.getElementById('chat-name').textContent = activeContact.name;
-  const statusEl = document.getElementById('chat-status');
-  statusEl.textContent = activeContact.status === 'online' ? '● Online' : activeContact.status === 'away' ? '◐ Away' : '○ Offline';
-  statusEl.style.color = activeContact.status === 'online' ? 'var(--online)' : activeContact.status === 'away' ? 'var(--away)' : 'var(--text-dim)';
-
-  activeContact.unread = 0;
-  renderContacts();
-  document.getElementById(`contact-${id}`)?.classList.add('active');
-  renderMessages(id);
-
-  document.getElementById('empty-state').style.display = 'none';
-  const ca = document.getElementById('chat-area');
-  ca.style.display = 'flex';
-  ca.classList.add('visible');
-}
-
-function renderMessages(id) {
-  const area = document.getElementById('messages-area');
-  const msgs = mockMessages[id] || [];
-  if (!msgs.length) {
-    area.innerHTML = `<div style="text-align:center;color:var(--text-dim);font-size:13px;margin-top:40px">No messages yet. Say hi!</div>`;
-    return;
-  }
-  const [bg, fg] = avatarColors[activeContact.color];
-  area.innerHTML = `<div class="msg-date-divider">Today</div>` + msgs.map(m => {
-    const isMine = m.from === 'me';
-    const theirAvatar = `<div class="msg-avatar-sm" style="background:${bg}20;color:${fg}">${initials(activeContact.name)}</div>`;
-    return `
-    <div class="msg-row ${isMine ? 'mine' : ''}">
-      ${!isMine ? theirAvatar : ''}
-      <div>
-        <div class="msg-bubble">${m.text}</div>
-        <div class="msg-time">${m.time}</div>
-      </div>
-    </div>`;
-  }).join('');
-  area.scrollTop = area.scrollHeight;
-}
-
-function sendMessage() {
-  const input = document.getElementById('msg-input');
-  const text = input.value.trim();
-  if (!text || !activeContact) return;
-  const time = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-  if (!mockMessages[activeContact.id]) mockMessages[activeContact.id] = [];
-  mockMessages[activeContact.id].push({ from:'me', text, time });
-  activeContact.preview = text;
-  activeContact.time = 'now';
-  renderContacts();
-  document.getElementById(`contact-${activeContact.id}`)?.classList.add('active');
-  renderMessages(activeContact.id);
-  input.value = '';
-  input.style.height = 'auto';
-}
-
-function handleKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-}
-
-document.getElementById('msg-input').addEventListener('input', function() {
-  this.style.height = 'auto';
-  this.style.height = Math.min(this.scrollHeight, 100) + 'px';
-});
-
 // ── PROFILE ──
 async function openProfile() {
-  const res = await fetch(`${API}/me/${localStorage.getItem('token')}`);
+  const res = await fetch(`${API}/me`,{credentials:'include'});
   if (!res.ok) return;
   const data = await res.json();
 
@@ -1181,13 +1498,13 @@ async function openProfile() {
   document.getElementById('profile-username').value = data.username;
   document.getElementById('profile-email').value = data.email;
   document.getElementById('profile-about').value = data.about ?? '';
-  document.getElementById('profile-avatar-lg').childNodes[0].textContent = data.username.slice(0,2).toUpperCase();
+  document.getElementById('profile-avatar-lg').childNodes[0].textContent = data.username.slice(0, 2).toUpperCase();
   originalAbout = data.about ?? '';
 
   document.getElementById('profile-modal').classList.add('open');
 }
 
-document.getElementById('profile-about').addEventListener('input', function() {
+document.getElementById('profile-about').addEventListener('input', function () {
   const changed = this.value.trim() !== originalAbout.trim();
   const btn = document.getElementById('save-btn');
   btn.disabled = !changed;
@@ -1196,23 +1513,21 @@ document.getElementById('profile-about').addEventListener('input', function() {
 });
 
 function formatJoinDate(dateStr) {
-  const date = new Date(dateStr);
-  return 'Joined on ' + date.toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' });
+  return 'Joined on ' + new Date(dateStr).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
 async function saveProfile() {
   const about = document.getElementById('profile-about').value.trim();
-  const res = await fetch(`${API}/update_about/${localStorage.getItem('token')}`, {
+  const res = await fetch(`${API}/update_about`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ about })
+    body: JSON.stringify({ about }),
+    credentials:'include'
   });
   if (!res.ok) return;
   originalAbout = about;
   const btn = document.getElementById('save-btn');
-  btn.disabled = true;
-  btn.style.opacity = '0.45';
-  btn.style.cursor = 'not-allowed';
+  btn.disabled = true; btn.style.opacity = '0.45'; btn.style.cursor = 'not-allowed';
   closeModal('profile-modal');
   showToast('Profile saved');
 }
@@ -1220,7 +1535,7 @@ async function saveProfile() {
 // ── LOGOUT ──
 async function logout() {
   const token = localStorage.getItem('token');
-  await fetch(`${API}/logout/${token}`);
+  await fetch(`${API}/logout`,{credentials:'include'});
   localStorage.removeItem('token');
   window.location.href = './index.html';
 }
@@ -1228,7 +1543,7 @@ async function logout() {
 // ── REQUESTS ──
 async function openRequests() {
   document.getElementById('requests-modal').classList.add('open');
-  requestCount = 0; // FIX: reset variable not just badge
+  requestCount = 0;
   updateRequestBadge(0);
   switchReqTab('incoming');
 }
@@ -1237,30 +1552,25 @@ async function switchReqTab(tab) {
   activeReqTab = tab;
   document.getElementById('tab-incoming').classList.toggle('active', tab === 'incoming');
   document.getElementById('tab-outgoing').classList.toggle('active', tab === 'outgoing');
-
   const token = localStorage.getItem('token');
   const endpoint = tab === 'incoming' ? 'requests_list' : 'requests_list_outgoing';
-  const res = await fetch(`${API}/${endpoint}/${token}`);
+  const res = await fetch(`${API}/${endpoint}`,{credentials:'include'});
   const data = await res.json();
   renderRequests(data, tab);
 }
 
 function renderRequests(data, tab) {
   const list = document.getElementById('requests-list');
-  if (!data || !data.length) {
-    list.innerHTML = `<div class="empty-requests">No ${tab} requests</div>`;
-    return;
-  }
+  if (!data || !data.length) { list.innerHTML = `<div class="empty-requests">No ${tab} requests</div>`; return; }
   list.innerHTML = data.map((r, i) => {
     const [bg, fg] = avatarColors[i % avatarColors.length];
     const displayName = r[1];
-    let temp=new Date(r[2]);
-    let date='Sent on '+temp.toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' });
+    const date = 'Sent on ' + new Date(r[2]).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     return `
     <div class="request-item" id="req-${r[0]}">
-      <div class="request-avatar" style="background:${bg}20;color:${fg}">${displayName.slice(0,2).toUpperCase()}</div>
+      <div class="request-avatar" style="background:${bg}20;color:${fg}">${displayName.slice(0, 2).toUpperCase()}</div>
       <div class="request-info">
-        <div class="request-name">${displayName}</div>
+        <div class="request-name">${escapeHtml(displayName)}</div>
         <div class="request-meta">${date}</div>
       </div>
       <div class="request-btns">
@@ -1276,16 +1586,16 @@ function renderRequests(data, tab) {
 }
 
 function acceptReq(id, senderUsername) {
-  ws.send(JSON.stringify({ type:'request', id, username:senderUsername, status:'accept' }));
+  ws.send(JSON.stringify({ type: 'request', id, username: senderUsername, status: 'accept' }));
   document.getElementById(`req-${id}`)?.remove();
-  requestCount = Math.max(0, requestCount - 1); 
+  requestCount = Math.max(0, requestCount - 1);
   updateRequestBadge(requestCount);
   if (!document.querySelectorAll('#requests-list .request-item').length)
     document.getElementById('requests-list').innerHTML = `<div class="empty-requests">No incoming requests</div>`;
 }
 
 function declineReq(id, username) {
-  ws.send(JSON.stringify({ type:'request', id, username, status:'decline' }));
+  ws.send(JSON.stringify({ type: 'request', id, username, status: 'decline' }));
   document.getElementById(`req-${id}`)?.remove();
   requestCount = Math.max(0, requestCount - 1);
   updateRequestBadge(requestCount);
@@ -1294,7 +1604,7 @@ function declineReq(id, username) {
 }
 
 function takebackReq(id, username) {
-  ws.send(JSON.stringify({ type:'request_takeback', id, username }));
+  ws.send(JSON.stringify({ type: 'request_takeback', id, username }));
   document.getElementById(`req-${id}`)?.remove();
   if (!document.querySelectorAll('#requests-list .request-item').length)
     document.getElementById('requests-list').innerHTML = `<div class="empty-requests">No ${activeReqTab} requests</div>`;
@@ -1304,7 +1614,7 @@ function sendRequest() {
   const input = document.getElementById('send-req-input');
   const username = input.value.trim();
   if (!username || !ws) return;
-  ws.send(JSON.stringify({ type:'request_send', username }));
+  ws.send(JSON.stringify({ type: 'request_send', username }));
 }
 
 function showReqFeedback(msg, ok) {
@@ -1323,7 +1633,7 @@ function showReqFeedback(msg, ok) {
 
 // ── BADGE ──
 function updateRequestBadge(count) {
-  const badge = document.getElementById('nav-badge'); // FIX: use id not class
+  const badge = document.getElementById('nav-badge');
   if (count > 0) {
     badge.textContent = count > 99 ? '99+' : count;
     badge.style.cssText = `display:unset;width:auto;min-width:16px;height:16px;border-radius:8px;font-size:9px;font-weight:600;color:#fff;padding:0 4px;top:4px;right:4px;background:var(--danger);border:2px solid var(--surface);position:absolute;`;
@@ -1332,6 +1642,208 @@ function updateRequestBadge(count) {
     badge.style.cssText = `display:none;`;
   }
 }
+
+// ── SIDEBAR SEARCH ──
+let sidebarSearchTimer = null;
+
+function onSidebarSearch(value) {
+  clearTimeout(sidebarSearchTimer);
+  const q = value.trim();
+
+  if (!q) {
+    // Restore normal sidebar
+    document.querySelector('.sidebar-section-label').textContent = 'Recent';
+    renderSidebar();
+    return;
+  }
+
+  // Debounce 300ms then hit API
+  sidebarSearchTimer = setTimeout(async () => {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/search_sidebar/${encodeURIComponent(q)}`,{credentials:'include'});
+    if (!res.ok) return;
+    const results = await res.json(); // [[username], ...]
+
+    const label = document.querySelector('.sidebar-section-label');
+    label.textContent = 'Results';
+
+    const list = document.getElementById('contact-list');
+    if (!results || !results.length) {
+      list.innerHTML = `<div style="padding:24px 12px;text-align:center;color:var(--text-dim);font-size:13px">No users found</div>`;
+      return;
+    }
+
+    list.innerHTML = results.map(r => {
+      const username = r[0];
+      const colorIdx = getColorIdx(username);
+      const [bg, fg] = avatarColors[colorIdx];
+      const existing = [...sidebarMap.values()].find(e => e.username === username);
+      const chat_id = existing ? existing.chat_id : null;
+      const isActive = activeChat && existing && activeChat.chat_id === existing.chat_id;
+      return `
+      <div class="contact-item search-result-item${isActive ? ' active' : ''}"
+           onclick="${chat_id ? `openChat('${chat_id}')` : ''}">
+        <div class="contact-avatar" style="background:${bg}20;color:${fg}">${initials(username)}</div>
+        <div class="contact-info">
+          <div class="contact-name">${escapeHtml(username)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }, 300);
+}
+
+// ── CHAT SEARCH ──
+let chatSearchResults = []; // [{id, sender, content, sent_at}]
+let chatSearchIdx = 0;
+let chatSearchTimer = null;
+let chatSearchOldestId = 999999999;
+
+function toggleChatSearch() {
+  if (!activeChat) return;
+  const bar = document.getElementById('chat-search-bar');
+  const isVisible = bar.classList.contains('visible');
+  if (isVisible) {
+    closeChatSearch();
+  } else {
+    bar.classList.add('visible');
+    document.getElementById('chat-search-input').focus();
+  }
+}
+
+function closeChatSearch() {
+  document.getElementById('chat-search-bar').classList.remove('visible');
+  document.getElementById('chat-search-input').value = '';
+  document.getElementById('chat-search-count').textContent = '';
+  chatSearchResults = [];
+  chatSearchIdx = 0;
+  chatSearchOldestId = 999999999;
+  // Remove highlights
+  document.querySelectorAll('.msg-row.search-match').forEach(el => el.classList.remove('search-match'));
+}
+
+function onChatSearch(value) {
+  clearTimeout(chatSearchTimer);
+  const q = value.trim();
+  if (!q) {
+    document.getElementById('chat-search-count').textContent = '';
+    chatSearchResults = [];
+    document.querySelectorAll('.msg-row.search-match').forEach(el => el.classList.remove('search-match'));
+    return;
+  }
+  chatSearchTimer = setTimeout(() => runChatSearch(q), 350);
+}
+
+async function runChatSearch(q) {
+  if (!activeChat) return;
+  chatSearchOldestId = 999999999;
+  chatSearchResults = [];
+  chatSearchIdx = 0;
+
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API}/search_chat/${activeChat.chat_id}/${encodeURIComponent(q)}/${chatSearchOldestId}`,{credentials:'include'});
+  if (!res.ok) return;
+  const rows = await res.json();
+  // rows: [id, sender, content, sent_at]
+  if (!rows || !rows.length) {
+    document.getElementById('chat-search-count').textContent = 'No results';
+    return;
+  }
+
+  // Results come back DESC (newest first) — keep that order for navigation
+  chatSearchResults = rows.map(r => ({ id: r[0], sender: r[1], content: r[2], sent_at: r[3] }));
+  chatSearchIdx = 0;
+  updateChatSearchCount();
+  scrollToSearchResult(chatSearchIdx);
+}
+
+function chatSearchStep(dir) {
+  if (!chatSearchResults.length) return;
+  chatSearchIdx = (chatSearchIdx + dir + chatSearchResults.length) % chatSearchResults.length;
+  updateChatSearchCount();
+  scrollToSearchResult(chatSearchIdx);
+}
+
+function chatSearchKey(e) {
+  if (e.key === 'Enter') { e.shiftKey ? chatSearchStep(-1) : chatSearchStep(1); }
+  if (e.key === 'Escape') closeChatSearch();
+}
+
+function updateChatSearchCount() {
+  const count = chatSearchResults.length;
+  document.getElementById('chat-search-count').textContent =
+    count ? `${chatSearchIdx + 1} / ${count}` : 'No results';
+}
+
+function scrollToSearchResult(idx) {
+  const match = chatSearchResults[idx];
+  if (!match) return;
+
+  document.querySelectorAll('.msg-row.search-match').forEach(el => el.classList.remove('search-match'));
+
+  // Already in DOM — just highlight and scroll
+  const el = document.querySelector(`.msg-row[data-id="${match.id}"]`);
+  if (el) {
+    el.classList.add('search-match');
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+
+  // Not in DOM — jump to that point in history
+  jumpToMessage(match);
+}
+
+async function jumpToMessage(match) {
+  if (!activeChat) return;
+  const token = localStorage.getItem('token');
+  const { chat_id } = activeChat;
+
+  // Fetch 50 messages before and 50 after in parallel
+  const [beforeRes, afterRes] = await Promise.all([
+    fetch(`${API}/load_chat/${match.id + 1}/${chat_id}`,{credentials:'include'}),
+    fetch(`${API}/load_chat_after/${match.id - 1}/${chat_id}`,{credentials:'include'})
+  ]);
+  const beforeRows = await beforeRes.json();
+  const afterRows = await afterRes.json();
+
+  const before = (beforeRows || [])
+    .map(r => ({ id: r[0], chat_id: r[1], sender: r[2], content: r[3], sent_at: r[4] }))
+    .reverse(); // load_chat returns DESC, reverse to chronological
+  const after = (afterRows || [])
+    .map(r => ({ id: r[0], chat_id: r[1], sender: r[2], content: r[3], sent_at: r[4] })); // load_chat_after returns ASC
+
+  const matchMsg = { id: match.id, chat_id, sender: match.sender, content: match.content, sent_at: match.sent_at };
+
+  // Replace the loaded message window with this slice
+  activeChat.messages = [...before, matchMsg, ...after];
+  activeChat.oldestId = before.length ? before[0].id : match.id;
+  activeChat.hasMore = before.length >= 50;
+  activeChat.hasNewer = after.length >= 50;
+
+  renderMessages();
+
+  setTimeout(() => {
+    const target = document.querySelector(`.msg-row[data-id="${match.id}"]`);
+    if (target) {
+      target.classList.add('search-match');
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, 50);
+}
+
+// Handle browser back/forward
+window.addEventListener('popstate', (e) => {
+  const chat_id = e.state?.chat_id;
+  if (chat_id && sidebarMap.has(chat_id)) {
+    openChat(chat_id);
+  } else {
+    // Back to no chat open
+    activeChat = null;
+    document.getElementById('chat-area').classList.remove('visible');
+    document.getElementById('chat-area').style.display = 'none';
+    document.getElementById('empty-state').style.display = '';
+    renderSidebar();
+  }
+});
 
 // ── UTILS ──
 function setNav(btn) {
