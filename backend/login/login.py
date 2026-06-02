@@ -1,4 +1,4 @@
-from fastapi import FastAPI,HTTPException,WebSocket,WebSocketDisconnect
+from fastapi import FastAPI,HTTPException,WebSocket,WebSocketDisconnect,Request,Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -16,16 +16,24 @@ import json
 import hashlib
 
 
-r=redis.Redis(host='localhost',port=6379,decode_responses=True)
+DB_HOST = os.getenv("DB_HOST")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_NAME = os.getenv("DB_NAME")
+REDIS_HOST = os.getenv("REDIS_HOST")
+REDIS_PORT = int(os.getenv("REDIS_PORT"))
+ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "").split(",")
+
+r=redis.Redis(host=REDIS_HOST,port=REDIS_PORT,decode_responses=True)
 
 async def get_connection(db_name):
     """
      connects to database and return the connection (MYSQL)
     """
     return await aiomysql.connect(
-        host="localhost",
-        user="app_user",
-        password="strong_password",
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
         db=db_name
     )
 
@@ -101,7 +109,7 @@ def generate_token(email,username):
 app=FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:5500"],
+    allow_origins=ALLOWED_ORIGIN,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
@@ -141,7 +149,7 @@ async def signup(x:user_input_signup):
         creation_time=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
-        connection=await get_connection("chat_db")
+        connection=await get_connection(DB_NAME)
         cursor=await connection.cursor()
 
 
@@ -165,14 +173,27 @@ async def signup(x:user_input_signup):
             #     max_age=60*60*24
             # )
             
-            content={
+
+            response=JSONResponse(
+                content={
                     "process":"signup",
                     "errors":0,
                     "status":"success",
                     "token":generate_token(email,username)
                 }
+            )
+            response.set_cookie(
+                key="token",
+                value=generate_token(email,username),
+                httponly=True,
+                secure=True,
+                samesite="none",
+                max_age=60*60*24
+            )
             
-            return content
+            return response
+            
+            
 
         except IntegrityError as e:
             msg=str(e).lower()
@@ -221,7 +242,7 @@ async def login(x:user_input):
     email=x.email.strip()
     query="SELECT password,username FROM user_metadata WHERE email=%s"
 
-    connection=await get_connection("chat_db")
+    connection=await get_connection(DB_NAME)
     cursor=await connection.cursor()
     try:
         await cursor.execute(query,(email,))
@@ -233,26 +254,23 @@ async def login(x:user_input):
                 "status":"fail"
             }
         if bcrypt.checkpw(x.password.encode(),creds[0].encode()):
-            # response=JSONResponse(
-            #     content={
-            #         "process":"login",
-            #         "status":"success"
-            #     }
-            # )
-            # response.set_cookie(
-            #     key="token",
-            #     value=generate_token(email,creds[1]),
-            #     httponly=True,
-            #     secure=False,
-            #     samesite="lax",
-            #     max_age=60*60*24
-            # )
-            content={
+            response=JSONResponse(
+                content={
                     "process":"login",
                     "status":"success",
                     "token":generate_token(email,creds[1])
                 }
-            return content
+            )
+            response.set_cookie(
+                key="token",
+                value=generate_token(email,creds[1]),
+                httponly=True,
+                secure=True,
+                samesite="none",
+                max_age=60*60*24
+            )
+            
+            return response
         
         return{
             "process":"login",
@@ -282,15 +300,17 @@ def validate_token(token):
 
 
 
-@app.get("/session/{token}")
-def validate_session(token:str):
+@app.get("/session")
+def validate_session(request: Request):
+    token=request.cookies.get("token")
     return validate_token(token)
 
 
 
-@app.get("/me/{token}")
-async def user_profile(token:str):
-    connection=await get_connection("chat_db")
+@app.get("/me")
+async def user_profile(request: Request):
+    token=request.cookies.get("token")
+    connection=await get_connection(DB_NAME)
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -310,9 +330,10 @@ async def user_profile(token:str):
 class about_input(BaseModel):
     about:str
 
-@app.patch("/update_about/{token}")
-async def update_about(about:about_input,token:str):
-    connection=await get_connection("chat_db")
+@app.patch("/update_about")
+async def update_about(about:about_input,request:Request):
+    token=request.cookies.get("token")
+    connection=await get_connection(DB_NAME)
     cursor=await connection.cursor()
     query="UPDATE user_metadata SET about_me=%s WHERE email=%s"
     try:
@@ -327,8 +348,9 @@ async def update_about(about:about_input,token:str):
         connection.close()
 
 
-@app.get("/logout/{token}")
-async def logout(token:str):
+@app.get("/logout")
+async def logout(request:Request,response: Response):
+    token=request.cookies.get("token")
     try:
         payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
         exp=payload["exp"]
@@ -337,6 +359,7 @@ async def logout(token:str):
         if ttl>0:
             await r.setex(f"blacklist:{token}",ttl,"1")
     finally:
+        response.delete_cookie("token")
         return{
             "process":"logout",
             "status":"success"
@@ -349,10 +372,11 @@ async def logout(token:str):
 #----- REQUESTS -----
 
 
-@app.get("/request_notification/{token}")
-async def requests_count(token:str):
+@app.get("/request_notification")
+async def requests_count(request:Request):
+    token=request.cookies.get("token")
     query="SELECT COUNT(*) FROM requests WHERE receiver=%s"
-    connection=await get_connection("chat_db")
+    connection=await get_connection(DB_NAME)
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -367,10 +391,11 @@ async def requests_count(token:str):
         await cursor.close()
         connection.close()
 
-@app.get("/requests_list/{token}")
-async def requests_list(token:str):
+@app.get("/requests_list")
+async def requests_list(request:Request):
+    token=request.cookies.get("token")
     query=("SELECT id,sender,req_time FROM requests WHERE receiver=%s")
-    connection=await get_connection("chat_db")
+    connection=await get_connection(DB_NAME)
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -385,10 +410,11 @@ async def requests_list(token:str):
 
 
 
-@app.get("/requests_list_outgoing/{token}")
-async def requests_list(token:str):
+@app.get("/requests_list_outgoing")
+async def requests_list(request:Request):
+    token=request.cookies.get("token")
     query=("SELECT id,receiver,req_time FROM requests WHERE sender=%s")
-    connection=await get_connection("chat_db")
+    connection=await get_connection(DB_NAME)
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -427,11 +453,11 @@ async def safe_send(soc, data: str):
 
 
 @app.websocket("/pulse/{token}")
-async def socket_manager(websocket: WebSocket,token:str):
+async def socket_manager(websocket: WebSocket):
 
 
     await websocket.accept()
-    
+    token=websocket.cookies.get("token")
 
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -453,7 +479,7 @@ async def socket_manager(websocket: WebSocket,token:str):
             data=json.loads(data)
             if data["type"]=="request":
                 query1="DELETE FROM requests WHERE id=%s"
-                connection=await get_connection("chat_db")
+                connection=await get_connection(DB_NAME)
                 cursor=await connection.cursor()
                 try:
                     await cursor.execute(query1,(data["id"],))
@@ -509,7 +535,7 @@ async def socket_manager(websocket: WebSocket,token:str):
                 query3="SELECT sender,receiver FROM requests WHERE sender=%s AND receiver=%s"
                 if data["username"]==payload["username"]:
                     continue
-                connection=await get_connection("chat_db")
+                connection=await get_connection(DB_NAME)
                 cursor=await connection.cursor()
                 try:
                     await cursor.execute(query3,(payload["username"],data["username"]))
@@ -568,7 +594,7 @@ async def socket_manager(websocket: WebSocket,token:str):
                     connection.close()
             elif data["type"]=="request_takeback":
                 query1="DELETE FROM requests WHERE id=%s"
-                connection=await get_connection("chat_db")
+                connection=await get_connection(DB_NAME)
                 cursor=await connection.cursor()
                 try:
                     await cursor.execute(query1,(data["id"],))
@@ -591,7 +617,7 @@ async def socket_manager(websocket: WebSocket,token:str):
                 query2="SELECT user1 FROM friends WHERE chat_id=%s"
 
                 sent_time=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-                connection=await get_connection("chat_db")
+                connection=await get_connection(DB_NAME)
                 cursor=await connection.cursor()
                 try:
                     await cursor.execute(query2,(data["chat_id"],))
@@ -630,7 +656,7 @@ async def socket_manager(websocket: WebSocket,token:str):
                     await cursor.close()
                     connection.close()
             elif data["type"]=="update_read_receipt":
-                connection=await get_connection("chat_db")
+                connection=await get_connection(DB_NAME)
                 cursor=await connection.cursor()
                 try:
                     
@@ -661,9 +687,10 @@ async def socket_manager(websocket: WebSocket,token:str):
 
 
 
-@app.get("/load_sidebar/{token}/{id}")
-async def load_sidebar(token:str,id: int):
-    connection=await get_connection("chat_db")
+@app.get("/load_sidebar/{id}")
+async def load_sidebar(request:Request,id: int):
+    token=request.cookies.get("token")
+    connection=await get_connection(DB_NAME)
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -698,9 +725,10 @@ async def load_sidebar(token:str,id: int):
         await cursor.close()
         connection.close()
 
-@app.get("/load_chat/{token}/{id}/{chat_id}")
-async def load_sidebar(token:str,id: int,chat_id:str):
-    connection=await get_connection("chat_db")
+@app.get("/load_chat/{id}/{chat_id}")
+async def load_sidebar(request:Request,id: int,chat_id:str):
+    token=request.cookies.get("token")
+    connection=await get_connection(DB_NAME)
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -723,9 +751,10 @@ async def load_sidebar(token:str,id: int,chat_id:str):
         await cursor.close()
         connection.close()
 
-@app.get("/load_chat_after/{token}/{id}/{chat_id}")
-async def load_chat_after(token: str, id: int, chat_id: str):
-    connection=await get_connection("chat_db")
+@app.get("/load_chat_after/{id}/{chat_id}")
+async def load_chat_after(request:Request, id: int, chat_id: str):
+    token=request.cookies.get("token")
+    connection=await get_connection(DB_NAME)
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -750,7 +779,7 @@ async def load_chat_after(token: str, id: int, chat_id: str):
 
 # @app.patch("/update_read_receipt/{token}/{id}/{chat_id}")
 # async def update_read_receipt(token:str,chat_id:str,id:int):
-#     connection=await get_connection("chat_db")
+#     connection=await get_connection(DB_NAME)
 #     cursor=await connection.cursor()
 #     try:
 #         if await r.exists(f"blacklist:{token}"):
@@ -765,9 +794,10 @@ async def load_chat_after(token: str, id: int, chat_id: str):
 #         await cursor.close()
 #         connection.close()
 
-@app.get("/search_sidebar/{token}/{input}")
-async def search_sidebar(token:str,input:str):
-    connection=await get_connection("chat_db")
+@app.get("/search_sidebar/{input}")
+async def search_sidebar(request:Request,input:str):
+    token=request.cookies.get("token")
+    connection=await get_connection(DB_NAME)
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -782,9 +812,10 @@ async def search_sidebar(token:str,input:str):
         await cursor.close()
         connection.close()
 
-@app.get("/search_chat/{token}/{chat_id}/{input}/{id}")
-async def search_chat(token:str,chat_id:str,input:str,id:int):
-    connection=await get_connection("chat_db")
+@app.get("/search_chat/{chat_id}/{input}/{id}")
+async def search_chat(request:Request,chat_id:str,input:str,id:int):
+    token=request.cookies.get("token")
+    connection=await get_connection(DB_NAME)
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
