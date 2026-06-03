@@ -25,7 +25,7 @@ REDIS_HOST = os.getenv("REDIS_HOST")
 REDIS_PORT = int(os.getenv("REDIS_PORT"))
 ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "").split(",")
 cert_content= os.getenv("DB_CERT")
-DB_PORT=os.getenv("DB_PORT")
+DB_PORT= int(os.getenv("DB_PORT"))
 
 r=redis.Redis(host=REDIS_HOST,port=REDIS_PORT,decode_responses=True)
 
