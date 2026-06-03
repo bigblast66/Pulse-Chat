@@ -27,8 +27,8 @@ ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "").split(",")
 cert_content= os.getenv("DB_CERT")
 DB_PORT= int(os.getenv("DB_PORT"))
 
-r=redis.Redis(host=REDIS_HOST,port=REDIS_PORT,decode_responses=True)
-
+# r=redis.Redis(host=REDIS_HOST,port=REDIS_PORT,decode_responses=True)
+r=redis.from_url(os.getenv("REDIS_URL"),decode_responses=True)
 async def get_connection(db_name):
     """
      connects to database and return the connection (MYSQL)
@@ -467,7 +467,7 @@ async def safe_send(soc, data: str):
 
 
 
-@app.websocket("/pulse/{token}")
+@app.websocket("/pulse")
 async def socket_manager(websocket: WebSocket):
 
 

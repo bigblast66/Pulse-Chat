@@ -1084,7 +1084,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateRequestBadge(requestCount);
 
   await loadSidebar();
-  connectWebSocket(token);
+  connectWebSocket();
 
   document.getElementById('contact-list').addEventListener('scroll', onSidebarScroll);
 
@@ -1398,8 +1398,8 @@ function sendReadReceipt(chat_id, msg_id) {
 }
 
 // ── WEBSOCKET ──
-function connectWebSocket(token) {
-  ws = new WebSocket(`ws://127.0.0.1:8000/pulse/${token}`);
+function connectWebSocket() {
+  ws = new WebSocket(`wss://pulse-chat-4132.onrender.com/pulse`);
 
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
@@ -1486,7 +1486,7 @@ function connectWebSocket(token) {
     }
   };
 
-  ws.onclose = () => setTimeout(() => connectWebSocket(token), 3000);
+  ws.onclose = () => setTimeout(() => connectWebSocket(), 3000);
 }
 
 // ── PROFILE ──

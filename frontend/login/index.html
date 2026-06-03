@@ -619,7 +619,8 @@ async function handleLogin() {
     const res = await fetch(`${API}/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ email, password }),
+      credentials:"include"
     });
     const data = await res.json();
 
@@ -675,7 +676,8 @@ async function handleSignup() {
     const res = await fetch(`${API}/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, username, password, confirm_password })
+      body: JSON.stringify({ email, username, password, confirm_password }),
+      credentials:"include"
     });
     const data = await res.json();
 
