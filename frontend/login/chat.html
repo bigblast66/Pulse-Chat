@@ -992,7 +992,9 @@ body {
 <div class="toast" id="toast"><div class="toast-dot"></div><span id="toast-msg"></span></div>
 
 <script>
-const API = 'http://127.0.0.1:8000';
+// const API = 'http://127.0.0.1:8000';
+const API = 'https://pulse-chat-4132.onrender.com';
+
 let ws;
 let currentUsername;
 let originalAbout = '';
@@ -1064,7 +1066,7 @@ function escapeHtml(str) {
 
 // ── INIT ──
 document.addEventListener('DOMContentLoaded', async () => {
-  const token = localStorage.getItem('token');
+  // const token = localStorage.getItem('token');
 
   const sessionRes = await fetch(`${API}/session`,{credentials:'include'});
   if (!sessionRes.ok) { location.href = './index.html'; return; }
@@ -1104,7 +1106,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadSidebar() {
   if (sidebarLoadingMore || sidebarAllLoaded) return;
   sidebarLoadingMore = true;
-  const token = localStorage.getItem('token');
+  // const token = localStorage.getItem('token');
   try {
     const res = await fetch(`${API}/load_sidebar/${sidebarOldestId}`,{credentials:'include'});
     if (!res.ok) return;
@@ -1250,7 +1252,7 @@ async function openChat(chat_id) {
 // ── LOAD MESSAGES (paginated) ──
 async function loadMoreMessages() {
   if (!activeChat || !activeChat.hasMore) return;
-  const token = localStorage.getItem('token');
+  // const token = localStorage.getItem('token');
   const { chat_id, oldestId } = activeChat;
 
   const res = await fetch(`${API}/load_chat/${oldestId}/${chat_id}`,{credentials:'include'});
@@ -1335,7 +1337,7 @@ function renderMessages(scrollToBottom = false) {
 
 async function loadNewerMessages() {
   if (!activeChat || !activeChat.hasNewer) return;
-  const token = localStorage.getItem('token');
+  // const token = localStorage.getItem('token');
   const { chat_id, messages } = activeChat;
   const newestId = messages[messages.length - 1].id;
 
@@ -1534,9 +1536,9 @@ async function saveProfile() {
 
 // ── LOGOUT ──
 async function logout() {
-  const token = localStorage.getItem('token');
+  // const token = localStorage.getItem('token');
   await fetch(`${API}/logout`,{credentials:'include'});
-  localStorage.removeItem('token');
+  // localStorage.removeItem('token');
   window.location.href = './index.html';
 }
 
@@ -1552,7 +1554,7 @@ async function switchReqTab(tab) {
   activeReqTab = tab;
   document.getElementById('tab-incoming').classList.toggle('active', tab === 'incoming');
   document.getElementById('tab-outgoing').classList.toggle('active', tab === 'outgoing');
-  const token = localStorage.getItem('token');
+  // const token = localStorage.getItem('token');
   const endpoint = tab === 'incoming' ? 'requests_list' : 'requests_list_outgoing';
   const res = await fetch(`${API}/${endpoint}`,{credentials:'include'});
   const data = await res.json();
@@ -1659,7 +1661,7 @@ function onSidebarSearch(value) {
 
   // Debounce 300ms then hit API
   sidebarSearchTimer = setTimeout(async () => {
-    const token = localStorage.getItem('token');
+    // const token = localStorage.getItem('token');
     const res = await fetch(`${API}/search_sidebar/${encodeURIComponent(q)}`,{credentials:'include'});
     if (!res.ok) return;
     const results = await res.json(); // [[username], ...]
@@ -1739,7 +1741,7 @@ async function runChatSearch(q) {
   chatSearchResults = [];
   chatSearchIdx = 0;
 
-  const token = localStorage.getItem('token');
+  // const token = localStorage.getItem('token');
   const res = await fetch(`${API}/search_chat/${activeChat.chat_id}/${encodeURIComponent(q)}/${chatSearchOldestId}`,{credentials:'include'});
   if (!res.ok) return;
   const rows = await res.json();
@@ -1794,7 +1796,7 @@ function scrollToSearchResult(idx) {
 
 async function jumpToMessage(match) {
   if (!activeChat) return;
-  const token = localStorage.getItem('token');
+  // const token = localStorage.getItem('token');
   const { chat_id } = activeChat;
 
   // Fetch 50 messages before and 50 after in parallel
