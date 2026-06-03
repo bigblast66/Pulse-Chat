@@ -193,8 +193,7 @@ async def signup(x:user_input_signup):
                 content={
                     "process":"signup",
                     "errors":0,
-                    "status":"success",
-                    "token":generate_token(email,username)
+                    "status":"success"
                 }
             )
             response.set_cookie(
@@ -272,8 +271,7 @@ async def login(x:user_input):
             response=JSONResponse(
                 content={
                     "process":"login",
-                    "status":"success",
-                    "token":generate_token(email,creds[1])
+                    "status":"success"
                 }
             )
             response.set_cookie(
@@ -374,11 +372,14 @@ async def logout(request:Request,response: Response):
         if ttl>0:
             await r.setex(f"blacklist:{token}",ttl,"1")
     finally:
-        response.delete_cookie("token")
-        return{
-            "process":"logout",
-            "status":"success"
-        }
+        response=JSONResponse(content={ "process":"logout","status":"success"})
+        response.delete_cookie(
+            key="token",
+            httponly=True,
+            secure=True,
+            samesite="none"
+        )
+        return response
 
 
 
