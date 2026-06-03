@@ -14,6 +14,7 @@ import os
 import redis.asyncio as redis
 import json
 import hashlib
+import ssl
 
 
 DB_HOST = os.getenv("DB_HOST")
@@ -23,6 +24,8 @@ DB_NAME = os.getenv("DB_NAME")
 REDIS_HOST = os.getenv("REDIS_HOST")
 REDIS_PORT = int(os.getenv("REDIS_PORT"))
 ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "").split(",")
+cert_content= os.getenv("DB_CERT")
+DB_PORT=os.getenv("DB_PORT")
 
 r=redis.Redis(host=REDIS_HOST,port=REDIS_PORT,decode_responses=True)
 
@@ -30,12 +33,24 @@ async def get_connection(db_name):
     """
      connects to database and return the connection (MYSQL)
     """
+    # return await aiomysql.connect(
+    #     host=DB_HOST,
+    #     user=DB_USER,
+    #     password=DB_PASSWORD,
+    #     db=db_name
+    # )
+    ssl_context = ssl.create_default_context()
+    ssl_context.load_verify_locations(cadata=cert_content)
+
     return await aiomysql.connect(
         host=DB_HOST,
         user=DB_USER,
         password=DB_PASSWORD,
-        db=db_name
+        port=DB_PORT,
+        db=db_name,
+        ssl=ssl_context
     )
+
 
 
 def isValidEmail(email):
