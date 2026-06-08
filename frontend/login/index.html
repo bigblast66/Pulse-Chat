@@ -628,7 +628,7 @@ async function handleLogin() {
       // localStorage.setItem('token', data.token);
       showToast('Signed in successfully', 'success');
       // redirect or update UI here
-      location.href="./index.html";
+      location.href="./chat.html";
     } else {
       showFieldError('login-password-err', 'Incorrect email or password');
       setInputState(document.getElementById('login-email'), 'error');
@@ -685,7 +685,7 @@ async function handleSignup() {
       // localStorage.setItem('token', data.token);
       showToast('Account created! Welcome to Pulse.', 'success');
       // redirect or update UI here
-      location.href="./index.html";
+      location.href="./chat.html";
     } else {
       for (let i = 1; i <= data.errors; i++) {
         const code = data[`error${i}`];

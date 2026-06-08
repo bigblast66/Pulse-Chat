@@ -778,7 +778,50 @@ body {
 .toast-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
 .toast.danger .toast-dot { background: var(--danger); }
 
-/* CHAT SEARCH PANEL */
+/* RESPONSIVE */
+@media (max-width: 768px) {
+  .nav-rail { display: none; }
+
+  .sidebar {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    z-index: 20;
+    transform: translateX(0);
+    transition: transform 0.25s ease;
+  }
+
+  .sidebar.hidden {
+    transform: translateX(-100%);
+    pointer-events: none;
+  }
+
+  .main {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+  }
+
+  .main.visible {
+    transform: translateX(0);
+  }
+
+  .chat-header {
+    padding: 0 12px;
+  }
+
+  .back-btn {
+    display: flex;
+  }
+
+  .msg-bubble { max-width: calc(100vw - 80px); }
+}
+
+@media (min-width: 769px) {
+  .back-btn { display: none !important; }
+}
 .chat-search-bar {
   display: none;
   padding: 8px 16px;
@@ -874,6 +917,9 @@ body {
 
   <div class="chat-area" id="chat-area">
     <div class="chat-header">
+      <button class="back-btn icon-btn" onclick="closeChatMobile()" title="Back" style="display:none">
+        <svg viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
       <div class="chat-header-avatar" id="chat-avatar"></div>
       <div class="chat-header-info">
         <div class="chat-header-name" id="chat-name"></div>
@@ -992,9 +1038,7 @@ body {
 <div class="toast" id="toast"><div class="toast-dot"></div><span id="toast-msg"></span></div>
 
 <script>
-// const API = 'http://127.0.0.1:8000';
 const API = 'https://pulse-chat-4132.onrender.com';
-
 let ws;
 let currentUsername;
 let originalAbout = '';
@@ -1066,19 +1110,18 @@ function escapeHtml(str) {
 
 // ── INIT ──
 document.addEventListener('DOMContentLoaded', async () => {
-  // const token = localStorage.getItem('token');
 
-  const sessionRes = await fetch(`${API}/session`,{credentials:'include'});
+  const sessionRes = await fetch(`${API}/session`, { credentials: 'include' });
   if (!sessionRes.ok) { location.href = './index.html'; return; }
 
-  const meRes = await fetch(`${API}/me`,{credentials:'include'});
+  const meRes = await fetch(`${API}/me`, { credentials: 'include' });
   const me = await meRes.json();
   if (!me) return;
 
   currentUsername = me.username;
   document.querySelector('.nav-avatar').childNodes[0].textContent = me.username.slice(0, 2).toUpperCase();
 
-  const countRes = await fetch(`${API}/request_notification`,{credentials:'include'});
+  const countRes = await fetch(`${API}/request_notification`, { credentials: 'include' });
   const countData = await countRes.json();
   requestCount = countData.requests_count;
   updateRequestBadge(requestCount);
@@ -1106,9 +1149,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadSidebar() {
   if (sidebarLoadingMore || sidebarAllLoaded) return;
   sidebarLoadingMore = true;
-  // const token = localStorage.getItem('token');
   try {
-    const res = await fetch(`${API}/load_sidebar/${sidebarOldestId}`,{credentials:'include'});
+    const res = await fetch(`${API}/load_sidebar/${sidebarOldestId}`, { credentials: 'include' });
     if (!res.ok) return;
     const rows = await res.json();
     if (!rows || !rows.length) { sidebarAllLoaded = true; return; }
@@ -1225,6 +1267,12 @@ async function openChat(chat_id) {
   ca.style.display = 'flex';
   ca.classList.add('visible');
 
+  // Mobile: slide to chat
+  if (window.innerWidth <= 768) {
+    document.querySelector('.sidebar').classList.add('hidden');
+    document.querySelector('.main').classList.add('visible');
+  }
+
   // Set header
   const [bg, fg] = avatarColors[entry.colorIdx];
   const avatar = document.getElementById('chat-avatar');
@@ -1252,10 +1300,9 @@ async function openChat(chat_id) {
 // ── LOAD MESSAGES (paginated) ──
 async function loadMoreMessages() {
   if (!activeChat || !activeChat.hasMore) return;
-  // const token = localStorage.getItem('token');
   const { chat_id, oldestId } = activeChat;
 
-  const res = await fetch(`${API}/load_chat/${oldestId}/${chat_id}`,{credentials:'include'});
+  const res = await fetch(`${API}/load_chat/${oldestId}/${chat_id}`, { credentials: 'include' });
   if (!res.ok) return;
   const rows = await res.json();
   // rows: [id, chat_id, sender, content, sent_at] ordered by id DESC
@@ -1337,11 +1384,10 @@ function renderMessages(scrollToBottom = false) {
 
 async function loadNewerMessages() {
   if (!activeChat || !activeChat.hasNewer) return;
-  // const token = localStorage.getItem('token');
   const { chat_id, messages } = activeChat;
   const newestId = messages[messages.length - 1].id;
 
-  const res = await fetch(`${API}/load_chat_after/${newestId}/${chat_id}`,{credentials:'include'});
+  const res = await fetch(`${API}/load_chat_after/${newestId}/${chat_id}`, { credentials: 'include' });
   if (!res.ok) return;
   const rows = await res.json();
   if (!rows || !rows.length) { activeChat.hasNewer = false; renderMessages(); return; }
@@ -1398,7 +1444,7 @@ function sendReadReceipt(chat_id, msg_id) {
 }
 
 // ── WEBSOCKET ──
-function connectWebSocket() {
+function connectWebSocket(token) {
   ws = new WebSocket(`wss://pulse-chat-4132.onrender.com/pulse`);
 
   ws.onmessage = (event) => {
@@ -1486,12 +1532,12 @@ function connectWebSocket() {
     }
   };
 
-  ws.onclose = () => setTimeout(() => connectWebSocket(), 3000);
+  ws.onclose = () => setTimeout(() => connectWebSocket(token), 3000);
 }
 
 // ── PROFILE ──
 async function openProfile() {
-  const res = await fetch(`${API}/me`,{credentials:'include'});
+  const res = await fetch(`${API}/me`, { credentials: 'include' });
   if (!res.ok) return;
   const data = await res.json();
 
@@ -1524,7 +1570,7 @@ async function saveProfile() {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ about }),
-    credentials:'include'
+    credentials: 'include'
   });
   if (!res.ok) return;
   originalAbout = about;
@@ -1536,17 +1582,13 @@ async function saveProfile() {
 
 // ── LOGOUT ──
 async function logout() {
-  // const token = localStorage.getItem('token');
-  await fetch(`${API}/logout`,{credentials:'include'});
-  // localStorage.removeItem('token');
+  await fetch(`${API}/logout`, { credentials: 'include' });
   window.location.href = './index.html';
 }
 
 // ── REQUESTS ──
 async function openRequests() {
   document.getElementById('requests-modal').classList.add('open');
-  requestCount = 0;
-  updateRequestBadge(0);
   switchReqTab('incoming');
 }
 
@@ -1554,9 +1596,8 @@ async function switchReqTab(tab) {
   activeReqTab = tab;
   document.getElementById('tab-incoming').classList.toggle('active', tab === 'incoming');
   document.getElementById('tab-outgoing').classList.toggle('active', tab === 'outgoing');
-  // const token = localStorage.getItem('token');
   const endpoint = tab === 'incoming' ? 'requests_list' : 'requests_list_outgoing';
-  const res = await fetch(`${API}/${endpoint}`,{credentials:'include'});
+  const res = await fetch(`${API}/${endpoint}`, { credentials: 'include' });
   const data = await res.json();
   renderRequests(data, tab);
 }
@@ -1661,8 +1702,7 @@ function onSidebarSearch(value) {
 
   // Debounce 300ms then hit API
   sidebarSearchTimer = setTimeout(async () => {
-    // const token = localStorage.getItem('token');
-    const res = await fetch(`${API}/search_sidebar/${encodeURIComponent(q)}`,{credentials:'include'});
+      const res = await fetch(`${API}/search_sidebar/${encodeURIComponent(q)}`, { credentials: 'include' });
     if (!res.ok) return;
     const results = await res.json(); // [[username], ...]
 
@@ -1741,8 +1781,7 @@ async function runChatSearch(q) {
   chatSearchResults = [];
   chatSearchIdx = 0;
 
-  // const token = localStorage.getItem('token');
-  const res = await fetch(`${API}/search_chat/${activeChat.chat_id}/${encodeURIComponent(q)}/${chatSearchOldestId}`,{credentials:'include'});
+  const res = await fetch(`${API}/search_chat/${activeChat.chat_id}/${encodeURIComponent(q)}/${chatSearchOldestId}`, { credentials: 'include' });
   if (!res.ok) return;
   const rows = await res.json();
   // rows: [id, sender, content, sent_at]
@@ -1796,13 +1835,12 @@ function scrollToSearchResult(idx) {
 
 async function jumpToMessage(match) {
   if (!activeChat) return;
-  // const token = localStorage.getItem('token');
   const { chat_id } = activeChat;
 
   // Fetch 50 messages before and 50 after in parallel
   const [beforeRes, afterRes] = await Promise.all([
-    fetch(`${API}/load_chat/${match.id + 1}/${chat_id}`,{credentials:'include'}),
-    fetch(`${API}/load_chat_after/${match.id - 1}/${chat_id}`,{credentials:'include'})
+    fetch(`${API}/load_chat/${match.id + 1}/${chat_id}`, { credentials: 'include' }),
+    fetch(`${API}/load_chat_after/${match.id - 1}/${chat_id}`, { credentials: 'include' })
   ]);
   const beforeRows = await beforeRes.json();
   const afterRows = await afterRes.json();
@@ -1832,17 +1870,28 @@ async function jumpToMessage(match) {
   }, 50);
 }
 
+function closeChatMobile() {
+  document.querySelector('.sidebar').classList.remove('hidden');
+  document.querySelector('.main').classList.remove('visible');
+  activeChat = null;
+  history.pushState({}, '', window.location.pathname);
+}
+
 // Handle browser back/forward
 window.addEventListener('popstate', (e) => {
   const chat_id = e.state?.chat_id;
   if (chat_id && sidebarMap.has(chat_id)) {
     openChat(chat_id);
   } else {
-    // Back to no chat open
     activeChat = null;
     document.getElementById('chat-area').classList.remove('visible');
     document.getElementById('chat-area').style.display = 'none';
     document.getElementById('empty-state').style.display = '';
+    // Mobile: show sidebar again
+    if (window.innerWidth <= 768) {
+      document.querySelector('.sidebar').classList.remove('hidden');
+      document.querySelector('.main').classList.remove('visible');
+    }
     renderSidebar();
   }
 });
