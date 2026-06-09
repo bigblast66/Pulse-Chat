@@ -314,8 +314,13 @@ def validate_token(token):
 
 
 @app.get("/session")
-def validate_session(request: Request):
+async def validate_session(request: Request):
     token=request.cookies.get("token")
+    try:
+        if await r.exists(f"blacklist:{token}"):
+                raise HTTPException(status_code=401,detail="invalid token")
+    except:
+        pass
     return validate_token(token)
 
 
@@ -329,14 +334,21 @@ async def user_profile(request: Request):
         if await r.exists(f"blacklist:{token}"):
             raise HTTPException(status_code=401,detail="invalid token")
         payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+      
+        cached=await r.get(f"profile:{payload['username']}")
+        if cached is not None:
+            return json.loads(cached)
+    
         await cursor.execute("SELECT about_me,creation_date FROM user_metadata WHERE email=%s",(payload["email"],))
         detail=await cursor.fetchone()
-        return{
+        data={
             "email":payload["email"],
             "username":payload["username"],
             "about":detail[0],
             "creation_date":detail[1]
         }
+        await r.setex(f"profile:{payload['username']}",300,json.dumps(data))
+        return data
     finally:
         await cursor.close()
         connection.close()
