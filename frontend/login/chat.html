@@ -1038,7 +1038,7 @@ body {
 <div class="toast" id="toast"><div class="toast-dot"></div><span id="toast-msg"></span></div>
 
 <script>
-const API = 'https://pulse-chat-4132.onrender.com';
+const API = 'https://pulsechat.qzz.io';
 let ws;
 let currentUsername;
 let originalAbout = '';
@@ -1445,7 +1445,7 @@ function sendReadReceipt(chat_id, msg_id) {
 
 // ── WEBSOCKET ──
 function connectWebSocket(token) {
-  ws = new WebSocket(`wss://pulse-chat-4132.onrender.com/pulse`);
+  ws = new WebSocket(`wss://pulsechat.qzz.io/pulse`);
 
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
