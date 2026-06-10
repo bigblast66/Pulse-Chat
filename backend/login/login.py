@@ -410,11 +410,17 @@ async def requests_count(request:Request):
         if await r.exists(f"blacklist:{token}"):
             raise HTTPException(status_code=401,detail="invalid token")
         payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+        cached=await r.get(f"req_count:{payload['username']}")
+        if cached is not None:
+            return json.loads(cached)
+
         await cursor.execute(query,(payload["username"],))
         req_count=await cursor.fetchone()
-        return{
+        data={
             "requests_count":req_count[0]
         }
+        await r.set(f"req_count:{payload['username']}",json.dumps(data))
+        return data
     finally:
         await cursor.close()
         connection.close()
@@ -511,6 +517,7 @@ async def socket_manager(websocket: WebSocket):
                 cursor=await connection.cursor()
                 try:
                     await cursor.execute(query1,(data["id"],))
+                    await r.decr(f"req_count:{payload['username']}")
                     if data["status"]=="accept":
                         query2="INSERT INTO friends (user1,user2,friend_date,chat_id) VALUES(%s,%s,%s,%s)"
                         friend_date=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
@@ -603,6 +610,7 @@ async def socket_manager(websocket: WebSocket):
                     query5="SELECT LAST_INSERT_ID()"
                     
                     await cursor.execute(query4,(payload["username"],data["username"],req_time))
+                    await r.incr(f"req_count:{data['username']}")
                     await connection.commit()
                     await cursor.execute(query5)
                     e=await cursor.fetchone()
@@ -626,6 +634,7 @@ async def socket_manager(websocket: WebSocket):
                 cursor=await connection.cursor()
                 try:
                     await cursor.execute(query1,(data["id"],))
+                    await r.decr(f"req_count:{data['username']}")
                     await connection.commit()
                     for soc in user_socket.get(payload["username"],[]):
                         await safe_send(soc,json.dumps({
