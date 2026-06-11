@@ -365,6 +365,7 @@ async def update_about(about:about_input,request:Request):
         if await r.exists(f"blacklist:{token}"):
             raise HTTPException(status_code=401,detail="invalid token")
         payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+        await r.delete(f"profile:{payload['username']}")
         
         await cursor.execute(query,(about.about,payload["email"]))
         await connection.commit()
@@ -733,7 +734,10 @@ async def load_sidebar(request:Request,id: int):
         if await r.exists(f"blacklist:{token}"):
             return
         payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
-
+        if id==999999999:
+            cached=await r.get(f"sidebar:{payload['username']}")
+            if cached is not None:
+                return json.loads(cached)
         query = """
                 SELECT a.user2, a.chat_id, b.sender, b.content, b.sent_at, b.id as last_id,
                     (
@@ -755,6 +759,8 @@ async def load_sidebar(request:Request,id: int):
             """
         await cursor.execute(query,(payload["username"],payload["username"],payload["username"],id))
         result=await cursor.fetchall()
+        if id==999999999:
+            await r.setex(f"sidebar:{payload['username']}",3600,json.dumps(result))
         return result
 
     
