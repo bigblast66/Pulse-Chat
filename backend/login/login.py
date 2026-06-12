@@ -651,8 +651,9 @@ async def socket_manager(websocket: WebSocket):
                     await cursor.close()
                     connection.close()
             elif data["type"]=="send_message":
-                query1="INSERT INTO chats (chat_id,sender,content,sent_at) VALUES(%s,%s,%s,%s)"
+                query1="INSERT INTO chats (chat_id,sender,content,sent_at,replied_to) VALUES(%s,%s,%s,%s,%s)"
                 query2="SELECT user1 FROM friends WHERE chat_id=%s"
+                query3="SELECT sender,content,sent_at FROM chats WHERE id=%s"
 
                 sent_time=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
                 connection=await get_connection(DB_NAME)
@@ -667,7 +668,12 @@ async def socket_manager(websocket: WebSocket):
                         continue
                     if data["username"] not in members:
                         continue
-                    await cursor.execute(query1,(data["chat_id"],payload["username"],data["content"],sent_time))
+                    replied=data["replied_to"]
+                    await cursor.execute(query1,(data["chat_id"],payload["username"],data["content"],sent_time,replied))
+                    if replied is not None:
+                        await cursor.execute(query3,(replied,))
+                        replied_content=await cursor.fetchone()
+
                     query2="SELECT LAST_INSERT_ID()"
                     await cursor.execute(query2)
                     res=await cursor.fetchone()
@@ -678,7 +684,9 @@ async def socket_manager(websocket: WebSocket):
                             "chat_id":data["chat_id"],
                             "sent_at":sent_time,
                             "id":res[0],
-                            "sender":payload["username"]
+                            "sender":payload["username"],
+                            "replied_to":data["replied_to"],
+                            "replied_content":replied_content[0]
                         }))
                     for soc in user_socket.get(data["username"],[]):
                         await safe_send(soc,json.dumps({
@@ -687,7 +695,9 @@ async def socket_manager(websocket: WebSocket):
                             "chat_id":data["chat_id"],
                             "sent_at":sent_time,
                             "id":res[0],
-                            "sender":payload["username"]
+                            "sender":payload["username"],
+                            "replied_to":data["replied_to"],
+                            "replied_content":replied_content[0]
                         }))
                 finally:
                     await connection.commit()
@@ -712,6 +722,16 @@ async def socket_manager(websocket: WebSocket):
                     await connection.commit()
                     await cursor.close()
                     connection.close()
+            elif data["type"]=="typing":
+                if r.exists(f"typing:{payload['username']}:{data['username']}"):
+                    continue
+                await r.setex(f"typing:{payload['username']}:{data['username']}",3,1)
+                for soc in user_socket.get(data['username'],[]):
+                    await safe_send(soc,json.dumps({
+                        "type":"typing",
+                        "username":payload['username'],
+                        "chat_id":data["chat_id"]
+                    }))
 
     except WebSocketDisconnect:
         username=socket_user[websocket]
@@ -779,9 +799,11 @@ async def load_sidebar(request:Request,id: int,chat_id:str):
         payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
 
         query = """
-                SELECT * FROM chats
-                WHERE chat_id=%s AND id<%s
-                ORDER BY id DESC
+                SELECT a.id,a.chat_id,a.sender,a.content,a.sent_at,a.replied_to FROM chats as a
+                LEFT JOIN chats as b
+                ON a.replied_to=b.id
+                WHERE a.chat_id=%s AND a.id<%s
+                ORDER BY a.id DESC
                 LIMIT 50
             """
         await cursor.execute(query,(chat_id,id))
@@ -805,9 +827,11 @@ async def load_chat_after(request:Request, id: int, chat_id: str):
         payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
 
         query = """
-                SELECT * FROM chats
-                WHERE chat_id=%s AND id>%s
-                ORDER BY id ASC
+                SELECT a.id,a.chat_id,a.sender,a.content,a.sent_at,a.replied_to FROM chats as a
+                LEFT JOIN chats as b
+                ON a.replied_to=b.id
+                WHERE a.chat_id=%s AND a.id>%s
+                ORDER BY a.id ASC
                 LIMIT 50
             """
         await cursor.execute(query,(chat_id,id))
