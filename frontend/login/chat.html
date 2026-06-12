@@ -253,6 +253,36 @@ body {
   margin-top: 1px;
 }
 
+/* Typing indicator in sidebar */
+.contact-preview.typing-preview {
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.typing-dots-sm {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.typing-dots-sm span {
+  width: 3px;
+  height: 3px;
+  background: var(--accent);
+  border-radius: 50%;
+  animation: typingBounce 1.2s infinite;
+}
+
+.typing-dots-sm span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots-sm span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typingBounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-3px); opacity: 1; }
+}
+
 .contact-meta {
   display: flex;
   flex-direction: column;
@@ -334,7 +364,47 @@ body {
 
 .chat-header-info { flex: 1; }
 .chat-header-name { font-size: 14px; font-weight: 600; color: var(--text); }
-.chat-header-status { font-size: 12px; color: var(--text-dim); }
+
+/* Floating typing pill inside messages area */
+.typing-pill {
+  display: none;
+  align-self: center;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin: 4px 0 2px;
+  animation: fadeInPill 0.2s ease;
+}
+
+.typing-pill.visible { display: flex; }
+
+@keyframes fadeInPill {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.typing-dots {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+}
+
+.typing-dots span {
+  width: 4px;
+  height: 4px;
+  background: var(--accent);
+  border-radius: 50%;
+  animation: typingBounce 1.2s infinite;
+}
+
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
 .chat-header-actions { display: flex; gap: 4px; }
 
 .icon-btn {
@@ -418,8 +488,50 @@ body {
   margin-bottom: 2px;
 }
 
-.msg-bubble {
+/* Message wrapper (holds reply quote + bubble) */
+.msg-wrap {
   max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: relative;
+}
+
+/* Reply button shown on hover */
+.reply-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border2);
+  background: var(--surface2);
+  color: var(--text-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  flex-shrink: 0;
+  z-index: 2;
+}
+
+.reply-btn svg { width: 13px; height: 13px; }
+.reply-btn:hover { background: var(--surface3); color: var(--accent); }
+
+/* Position: outside the bubble, on the side away from the wall */
+.msg-row:not(.mine) .reply-btn { right: -36px; }
+.msg-row.mine .reply-btn { left: -36px; }
+
+.msg-row:hover .reply-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.msg-bubble {
   padding: 8px 12px;
   border-radius: 12px;
   font-size: 13.5px;
@@ -430,8 +542,99 @@ body {
 .msg-row:not(.mine) .msg-bubble { background: var(--surface2); color: var(--text); border-bottom-left-radius: 3px; }
 .msg-row.mine .msg-bubble { background: var(--accent); color: #fff; border-bottom-right-radius: 3px; }
 
+/* Reply quote block inside a bubble */
+.reply-quote {
+  border-radius: 8px 8px 0 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  border-left: 3px solid rgba(255,255,255,0.3);
+  margin-bottom: -4px;
+}
+
+.msg-row:not(.mine) .reply-quote {
+  background: var(--surface3);
+  border-left-color: var(--accent);
+  color: var(--text-muted);
+  border-radius: 8px 8px 0 0;
+}
+
+.msg-row.mine .reply-quote {
+  background: rgba(0,0,0,0.2);
+  border-left-color: rgba(255,255,255,0.5);
+  color: rgba(255,255,255,0.7);
+}
+
+.reply-quote-sender {
+  font-weight: 600;
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+
+.msg-row:not(.mine) .reply-quote-sender { color: var(--accent); }
+.msg-row.mine .reply-quote-sender { color: rgba(255,255,255,0.85); }
+
 .msg-time { font-size: 10.5px; color: var(--text-dim); margin-top: 3px; text-align: right; padding: 0 4px; }
 .msg-row.mine .msg-time { text-align: left; }
+
+/* REPLY BAR above input */
+.reply-bar {
+  display: none;
+  padding: 8px 16px 0;
+  gap: 10px;
+  align-items: center;
+  animation: slideUpSmall 0.15s ease;
+}
+
+.reply-bar.visible { display: flex; }
+
+@keyframes slideUpSmall {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.reply-bar-inner {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  min-width: 0;
+}
+
+.reply-bar-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 2px;
+}
+
+.reply-bar-preview {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reply-cancel {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: var(--surface3);
+  color: var(--text-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.reply-cancel:hover { background: var(--surface2); color: var(--text-muted); }
+.reply-cancel svg { width: 12px; height: 12px; }
 
 .chat-input-area {
   padding: 12px 16px 14px;
@@ -816,7 +1019,7 @@ body {
     display: flex;
   }
 
-  .msg-bubble { max-width: calc(100vw - 80px); }
+  .msg-wrap { max-width: calc(100vw - 80px); }
 }
 
 @media (min-width: 769px) {
@@ -855,7 +1058,6 @@ body {
 }
 .msg-row.search-match .msg-bubble { outline: 1px solid var(--accent); outline-offset: 2px; border-radius: 12px; }
 
-/* SIDEBAR SEARCH RESULTS */
 .sidebar-section-label.search-label { color: var(--accent); }
 .contact-item.search-result-item .contact-preview { color: var(--text-muted); }
 </style>
@@ -923,7 +1125,6 @@ body {
       <div class="chat-header-avatar" id="chat-avatar"></div>
       <div class="chat-header-info">
         <div class="chat-header-name" id="chat-name"></div>
-        <div class="chat-header-status" id="chat-status"></div>
       </div>
       <div class="chat-header-actions">
         <button class="icon-btn" title="Search in chat" onclick="toggleChatSearch()">
@@ -953,10 +1154,25 @@ body {
     </div>
 
     <div class="messages-area" id="messages-area"></div>
+    <div class="typing-pill" id="typing-pill">
+      <span class="typing-dots"><span></span><span></span><span></span></span>
+      <span id="typing-pill-name"></span> is typing
+    </div>
+
+    <!-- REPLY BAR -->
+    <div class="reply-bar" id="reply-bar">
+      <div class="reply-bar-inner">
+        <div class="reply-bar-label" id="reply-bar-label">Replying to</div>
+        <div class="reply-bar-preview" id="reply-bar-preview"></div>
+      </div>
+      <button class="reply-cancel" onclick="clearReply()" title="Cancel reply">
+        <svg viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2L2 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>
 
     <div class="chat-input-area">
       <div class="input-row">
-        <textarea class="msg-input" id="msg-input" rows="1" placeholder="Message…" onkeydown="handleKey(event)"></textarea>
+        <textarea class="msg-input" id="msg-input" rows="1" placeholder="Message…" onkeydown="handleKey(event)" oninput="onMsgInput(event)"></textarea>
         <button class="send-btn" onclick="sendMessage()">
           <svg viewBox="0 0 16 16" fill="none"><path d="M14 2L2 7l5 2 2 5 5-12z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
         </button>
@@ -1038,7 +1254,9 @@ body {
 <div class="toast" id="toast"><div class="toast-dot"></div><span id="toast-msg"></span></div>
 
 <script>
-const API = 'https://pulsechat.qzz.io';
+// const API = 'https://pulsechat.qzz.io';
+const API = 'http://127.0.0.1:8000';
+
 let ws;
 let currentUsername;
 let originalAbout = '';
@@ -1046,14 +1264,23 @@ let activeReqTab = 'incoming';
 let requestCount = 0;
 
 // ── SIDEBAR STATE ──
-// Map of chat_id -> { username, chat_id, sender, content, sent_at, last_id, unread_count, colorIdx }
 const sidebarMap = new Map();
 let sidebarOldestId = 999999999;
 let sidebarLoadingMore = false;
 let sidebarAllLoaded = false;
 
+// ── TYPING STATE ──
+// Map of username -> timeout handle (auto-clear after 3.5s of no pings)
+const typingUsers = new Map();
+
+// For outgoing typing pings — track last ping time per chat_id
+let lastTypingPing = 0;
+const TYPING_THROTTLE = 2500; // send a ping at most every 2.5s (backend TTL is 3s)
+
+// ── REPLY STATE ──
+let replyingTo = null; // { id, sender, content }
+
 // ── ACTIVE CHAT STATE ──
-// { username, chat_id, colorIdx, messages: [{id,sender,content,sent_at}], oldestId, hasMore }
 let activeChat = null;
 
 const avatarColors = [
@@ -1108,9 +1335,79 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+// ── TYPING HELPERS ──
+
+function setTyping(username, chat_id) {
+  // Clear existing timeout for this user
+  if (typingUsers.has(username)) {
+    clearTimeout(typingUsers.get(username));
+  }
+  // Auto-clear after 3.5s (slightly past the 3s Redis TTL)
+  const timer = setTimeout(() => clearTyping(username, chat_id), 3500);
+  typingUsers.set(username, timer);
+
+  // Update UI
+  updateTypingUI(username, chat_id, true);
+}
+
+function clearTyping(username, chat_id) {
+  if (typingUsers.has(username)) {
+    clearTimeout(typingUsers.get(username));
+    typingUsers.delete(username);
+  }
+  updateTypingUI(username, chat_id, false);
+}
+
+function updateTypingUI(username, chat_id, isTyping) {
+  // 1. Update sidebar preview for that contact
+  const entry = sidebarMap.get(chat_id);
+  if (entry) {
+    const el = document.querySelector(`#sidebar-${chat_id} .contact-preview`);
+    if (el) {
+      if (isTyping) {
+        el.className = 'contact-preview typing-preview';
+        el.innerHTML = `<span class="typing-dots-sm"><span></span><span></span><span></span></span> typing…`;
+      } else {
+        el.className = 'contact-preview';
+        const previewPrefix = entry.sender === currentUsername ? 'You: ' : '';
+        el.textContent = previewPrefix + (entry.content ? entry.content : '—');
+      }
+    }
+  }
+
+  // 2. Show/hide floating typing pill if this chat is open
+  if (activeChat && activeChat.chat_id === chat_id) {
+    const pill = document.getElementById('typing-pill');
+    const nameEl = document.getElementById('typing-pill-name');
+    if (isTyping) {
+      nameEl.textContent = username;
+      pill.classList.add('visible');
+    } else {
+      pill.classList.remove('visible');
+    }
+  }
+}
+
+// ── REPLY HELPERS ──
+
+function setReply(msg) {
+  replyingTo = msg;
+  const bar = document.getElementById('reply-bar');
+  const label = document.getElementById('reply-bar-label');
+  const preview = document.getElementById('reply-bar-preview');
+  label.textContent = msg.sender === currentUsername ? 'Replying to yourself' : `Replying to ${msg.sender}`;
+  preview.textContent = msg.content;
+  bar.classList.add('visible');
+  document.getElementById('msg-input').focus();
+}
+
+function clearReply() {
+  replyingTo = null;
+  document.getElementById('reply-bar').classList.remove('visible');
+}
+
 // ── INIT ──
 document.addEventListener('DOMContentLoaded', async () => {
-
   const sessionRes = await fetch(`${API}/session`, { credentials: 'include' });
   if (!sessionRes.ok) { location.href = './index.html'; return; }
 
@@ -1131,16 +1428,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('contact-list').addEventListener('scroll', onSidebarScroll);
 
-  // Restore chat from URL on refresh
   const params = new URLSearchParams(window.location.search);
   const chatIdFromUrl = params.get('c');
   if (chatIdFromUrl) {
-    // Wait until sidebar is populated then open
-    const tryOpen = () => {
-      if (sidebarMap.has(chatIdFromUrl)) openChat(chatIdFromUrl);
-    };
+    const tryOpen = () => { if (sidebarMap.has(chatIdFromUrl)) openChat(chatIdFromUrl); };
     tryOpen();
-    // If not loaded yet (e.g. paginated), try again after first render
     setTimeout(tryOpen, 400);
   }
 });
@@ -1156,7 +1448,6 @@ async function loadSidebar() {
     if (!rows || !rows.length) { sidebarAllLoaded = true; return; }
 
     for (const row of rows) {
-      // [user2, chat_id, sender, content, sent_at, last_id, unread_count]
       const [username, chat_id, sender, content, sent_at, last_id, unread_count] = row;
       if (!sidebarMap.has(chat_id)) {
         sidebarMap.set(chat_id, {
@@ -1168,7 +1459,6 @@ async function loadSidebar() {
       }
     }
 
-    // Update oldest id — rows ordered by last_id DESC, pick smallest non-null
     const validIds = rows.map(r => r[5]).filter(id => id !== null);
     if (validIds.length) sidebarOldestId = Math.min(...validIds);
     if (rows.length < 50) sidebarAllLoaded = true;
@@ -1196,14 +1486,23 @@ function renderSidebar() {
   list.innerHTML = sorted.map(c => {
     const [bg, fg] = avatarColors[c.colorIdx];
     const isActive = activeChat && activeChat.chat_id === c.chat_id;
+    const isTypingNow = typingUsers.has(c.username);
     const previewPrefix = c.sender === currentUsername ? 'You: ' : '';
     const preview = c.content ? escapeHtml(c.content) : '—';
+
+    let previewHtml;
+    if (isTypingNow) {
+      previewHtml = `<div class="contact-preview typing-preview"><span class="typing-dots-sm"><span></span><span></span><span></span></span> typing…</div>`;
+    } else {
+      previewHtml = `<div class="contact-preview">${previewPrefix}${preview}</div>`;
+    }
+
     return `
     <div class="contact-item${isActive ? ' active' : ''}" id="sidebar-${c.chat_id}" onclick="openChat('${c.chat_id}')">
       <div class="contact-avatar" style="background:${bg}20;color:${fg}">${initials(c.username)}</div>
       <div class="contact-info">
         <div class="contact-name">${escapeHtml(c.username)}</div>
-        <div class="contact-preview">${previewPrefix}${preview}</div>
+        ${previewHtml}
       </div>
       <div class="contact-meta">
         <span class="contact-time">${formatTime(c.sent_at)}</span>
@@ -1213,7 +1512,6 @@ function renderSidebar() {
   }).join('');
 }
 
-// Upsert a sidebar entry when a real-time message comes in
 function upsertSidebarEntry(chat_id, username, sender, content, sent_at, msg_id, isIncoming) {
   if (sidebarMap.has(chat_id)) {
     const e = sidebarMap.get(chat_id);
@@ -1225,7 +1523,6 @@ function upsertSidebarEntry(chat_id, username, sender, content, sent_at, msg_id,
       e.unread_count = (e.unread_count || 0) + 1;
     }
   } else {
-    // New friend just messaged — insert fresh entry
     sidebarMap.set(chat_id, {
       username, chat_id, sender, content, sent_at,
       last_id: msg_id,
@@ -1240,11 +1537,8 @@ function upsertSidebarEntry(chat_id, username, sender, content, sent_at, msg_id,
 async function openChat(chat_id) {
   const entry = sidebarMap.get(chat_id);
   if (!entry) return;
-
-  // If already open in this chat, do nothing
   if (activeChat && activeChat.chat_id === chat_id) return;
 
-  // Push chat_id into URL so refresh restores it
   history.pushState({ chat_id }, '', `?c=${chat_id}`);
 
   activeChat = {
@@ -1257,38 +1551,43 @@ async function openChat(chat_id) {
     hasNewer: false
   };
 
-  // Clear unread for this entry
+  // Clear reply state when switching chats
+  clearReply();
+
   entry.unread_count = 0;
   renderSidebar();
 
-  // Show chat panel
   document.getElementById('empty-state').style.display = 'none';
   const ca = document.getElementById('chat-area');
   ca.style.display = 'flex';
   ca.classList.add('visible');
 
-  // Mobile: slide to chat
   if (window.innerWidth <= 768) {
     document.querySelector('.sidebar').classList.add('hidden');
     document.querySelector('.main').classList.add('visible');
   }
 
-  // Set header
   const [bg, fg] = avatarColors[entry.colorIdx];
   const avatar = document.getElementById('chat-avatar');
   avatar.textContent = initials(entry.username);
   avatar.style.cssText = `background:${bg}20;color:${fg};width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;`;
   document.getElementById('chat-name').textContent = entry.username;
-  document.getElementById('chat-status').textContent = '';
 
-  // Load first batch of messages
+  // Reset typing pill when switching chats
+  const pill = document.getElementById('typing-pill');
+  const nameEl = document.getElementById('typing-pill-name');
+  pill.classList.remove('visible');
+  if (typingUsers.has(entry.username)) {
+    nameEl.textContent = entry.username;
+    pill.classList.add('visible');
+  }
+
   document.getElementById('messages-area').innerHTML = '';
   await loadMoreMessages();
 
   const area = document.getElementById('messages-area');
   area.scrollTop = area.scrollHeight;
 
-  // Mark as read
   if (activeChat.messages.length) {
     const latestId = activeChat.messages[activeChat.messages.length - 1].id;
     sendReadReceipt(chat_id, latestId);
@@ -1297,7 +1596,7 @@ async function openChat(chat_id) {
   document.getElementById('msg-input').focus();
 }
 
-// ── LOAD MESSAGES (paginated) ──
+// ── LOAD MESSAGES ──
 async function loadMoreMessages() {
   if (!activeChat || !activeChat.hasMore) return;
   const { chat_id, oldestId } = activeChat;
@@ -1305,20 +1604,19 @@ async function loadMoreMessages() {
   const res = await fetch(`${API}/load_chat/${oldestId}/${chat_id}`, { credentials: 'include' });
   if (!res.ok) return;
   const rows = await res.json();
-  // rows: [id, chat_id, sender, content, sent_at] ordered by id DESC
+
   if (!rows || !rows.length) {
     activeChat.hasMore = false;
     renderMessages();
     return;
   }
 
-  // Reverse to get chronological order, then prepend to existing messages
+  // rows: [id, chat_id, sender, content, sent_at, replied_to]
   const newMsgs = rows
-    .map(r => ({ id: r[0], chat_id: r[1], sender: r[2], content: r[3], sent_at: r[4] }))
+    .map(r => ({ id: r[0], chat_id: r[1], sender: r[2], content: r[3], sent_at: r[4], replied_to: r[5] ?? null, replied_content: null }))
     .reverse();
 
   activeChat.messages = [...newMsgs, ...activeChat.messages];
-  // Smallest id among this batch = oldest we've seen
   activeChat.oldestId = rows[rows.length - 1][0];
   if (rows.length < 50) activeChat.hasMore = false;
 
@@ -1330,7 +1628,6 @@ async function loadOlderMessages() {
   const area = document.getElementById('messages-area');
   const prevHeight = area.scrollHeight;
   await loadMoreMessages();
-  // Keep user's scroll position
   area.scrollTop = area.scrollHeight - prevHeight;
 }
 
@@ -1357,10 +1654,33 @@ function renderMessages(scrollToBottom = false) {
     }
     const isMine = m.sender === currentUsername;
     const theirAvatar = `<div class="msg-avatar-sm" style="background:${bg}20;color:${fg}">${initials(activeChat.username)}</div>`;
+
+    // Build reply quote if this message is a reply
+    let replyQuoteHtml = '';
+    if (m.replied_to !== null) {
+      // Look up the quoted message in memory first, then fall back to replied_content from WS echo
+      const quotedMsg = activeChat.messages.find(x => x.id === m.replied_to);
+      const quotedContent = quotedMsg ? quotedMsg.content : (m.replied_content || '…');
+      const quotedSender = quotedMsg ? quotedMsg.sender : (isMine ? activeChat.username : currentUsername);
+      replyQuoteHtml = `
+        <div class="reply-quote">
+          <div class="reply-quote-sender">${escapeHtml(quotedSender)}</div>
+          <div>${escapeHtml(String(quotedContent))}</div>
+        </div>`;
+    }
+
+    // Safe content for inline onclick attribute
+    const safeContent = m.content.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,' ');
+    const safeSender = m.sender.replace(/'/g,"\\'");
+
     html += `
     <div class="msg-row ${isMine ? 'mine' : ''}" data-id="${m.id}">
       ${!isMine ? theirAvatar : ''}
-      <div>
+      <div class="msg-wrap">
+        <button class="reply-btn" onclick="setReply({id:${m.id},sender:'${safeSender}',content:'${safeContent}'})" title="Reply">
+          <svg viewBox="0 0 14 14" fill="none"><path d="M1 5h8a4 4 0 0 1 0 8H6M1 5l3-3M1 5l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        ${replyQuoteHtml}
         <div class="msg-bubble">${escapeHtml(m.content)}</div>
         <div class="msg-time">${formatMsgTime(m.sent_at)}</div>
       </div>
@@ -1392,8 +1712,7 @@ async function loadNewerMessages() {
   const rows = await res.json();
   if (!rows || !rows.length) { activeChat.hasNewer = false; renderMessages(); return; }
 
-  // rows come ASC (oldest first) — already correct order to append
-  const newMsgs = rows.map(r => ({ id: r[0], chat_id: r[1], sender: r[2], content: r[3], sent_at: r[4] }));
+  const newMsgs = rows.map(r => ({ id: r[0], chat_id: r[1], sender: r[2], content: r[3], sent_at: r[4], replied_to: r[5] ?? null, replied_content: null }));
   const area = document.getElementById('messages-area');
   const prevDistFromBottom = area.scrollHeight - area.scrollTop - area.clientHeight;
 
@@ -1401,11 +1720,9 @@ async function loadNewerMessages() {
   if (newMsgs.length < 50) activeChat.hasNewer = false;
 
   renderMessages();
-  // Keep distance from bottom the same
   area.scrollTop = area.scrollHeight - area.clientHeight - prevDistFromBottom;
 }
 
-// Scroll handler — load older at top, load newer at bottom
 document.getElementById('messages-area').addEventListener('scroll', function () {
   if (this.scrollTop < 40 && activeChat?.hasMore) loadOlderMessages();
   if (this.scrollHeight - this.scrollTop - this.clientHeight < 40 && activeChat?.hasNewer) loadNewerMessages();
@@ -1417,25 +1734,49 @@ function sendMessage() {
   const text = input.value.trim();
   if (!text || !activeChat || !ws || ws.readyState !== WebSocket.OPEN) return;
 
-  ws.send(JSON.stringify({
+  const payload = {
     type: 'send_message',
     chat_id: activeChat.chat_id,
     username: activeChat.username,
     content: text
-  }));
+  };
+
+  if (replyingTo) {
+    payload.replied_to = replyingTo.id;
+  }
+
+  ws.send(JSON.stringify(payload));
 
   input.value = '';
   input.style.height = 'auto';
+  clearReply();
 }
 
 function handleKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 }
 
-document.getElementById('msg-input').addEventListener('input', function () {
-  this.style.height = 'auto';
-  this.style.height = Math.min(this.scrollHeight, 100) + 'px';
-});
+// ── OUTGOING TYPING PINGS ──
+function onMsgInput(e) {
+  // Auto-resize textarea
+  e.target.style.height = 'auto';
+  e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
+
+  // Send typing ping — throttled so we only ping every 2.5s while they keep typing.
+  // The backend stores a Redis key with 3s TTL, so as long as pings keep coming
+  // the key stays alive, keeping the indicator visible. When they stop typing,
+  // no more pings → key expires after 3s → frontend auto-clears after 3.5s.
+  if (!activeChat || !ws || ws.readyState !== WebSocket.OPEN) return;
+  const now = Date.now();
+  if (now - lastTypingPing < TYPING_THROTTLE) return;
+  lastTypingPing = now;
+
+  ws.send(JSON.stringify({
+    type: 'typing',
+    username: activeChat.username,
+    chat_id: activeChat.chat_id
+  }));
+}
 
 // ── READ RECEIPT ──
 function sendReadReceipt(chat_id, msg_id) {
@@ -1444,15 +1785,25 @@ function sendReadReceipt(chat_id, msg_id) {
 }
 
 // ── WEBSOCKET ──
-function connectWebSocket(token) {
-  ws = new WebSocket(`wss://pulsechat.qzz.io/pulse`);
+function connectWebSocket() {
+  // ws = new WebSocket(`wss://pulsechat.qzz.io/pulse`);
+  ws = new WebSocket(`ws://127.0.0.1:8000/pulse`);
+
 
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
 
-    // ── OWN MESSAGE ECHOED BACK ──
     if (msg.type === 'sent_message') {
-      const newMsg = { id: msg.id || Date.now(), chat_id: msg.chat_id, sender: msg.sender, content: msg.content, sent_at: msg.sent_at };
+      const newMsg = {
+        id: msg.id || Date.now(),
+        chat_id: msg.chat_id,
+        sender: msg.sender,
+        content: msg.content,
+        sent_at: msg.sent_at,
+        replied_to: msg.replied_to ?? null,
+        // For own sent messages the backend echoes replied_content
+        replied_content: msg.replied_content ?? null
+      };
       if (activeChat && activeChat.chat_id === msg.chat_id) {
         activeChat.messages.push(newMsg);
         renderMessages(true);
@@ -1462,19 +1813,26 @@ function connectWebSocket(token) {
       upsertSidebarEntry(msg.chat_id, entry ? entry.username : activeChat?.username, msg.sender, msg.content, msg.sent_at, newMsg.id, false);
     }
 
-    // ── INCOMING MESSAGE FROM OTHER USER ──
     if (msg.type === 'receive_message') {
-      const newMsg = { id: msg.id || Date.now(), chat_id: msg.chat_id, sender: msg.sender, content: msg.content, sent_at: msg.sent_at };
+      const newMsg = {
+        id: msg.id || Date.now(),
+        chat_id: msg.chat_id,
+        sender: msg.sender,
+        content: msg.content,
+        sent_at: msg.sent_at,
+        replied_to: msg.replied_to ?? null,
+        replied_content: msg.replied_content ?? null
+      };
       if (activeChat && activeChat.chat_id === msg.chat_id) {
+        // Clear their typing indicator since they sent a message
+        clearTyping(msg.sender, msg.chat_id);
         activeChat.messages.push(newMsg);
         renderMessages(true);
-        // Chat is open — immediately mark as read
         sendReadReceipt(msg.chat_id, newMsg.id);
       }
       upsertSidebarEntry(msg.chat_id, msg.sender, msg.sender, msg.content, msg.sent_at, newMsg.id, true);
     }
 
-    // ── READ RECEIPT CONFIRMED (fires on all tabs for the same user) ──
     if (msg.type === 'updated_read_receipt') {
       if (sidebarMap.has(msg.chat_id)) {
         sidebarMap.get(msg.chat_id).unread_count = 0;
@@ -1482,7 +1840,12 @@ function connectWebSocket(token) {
       }
     }
 
-    // ── REQUESTS ──
+    // ── INCOMING TYPING ──
+    if (msg.type === 'typing') {
+      // msg.username = who is typing, msg.chat_id = which chat
+      setTyping(msg.username, msg.chat_id);
+    }
+
     if (msg.type === 'request_receive') {
       requestCount++;
       updateRequestBadge(requestCount);
@@ -1506,7 +1869,6 @@ function connectWebSocket(token) {
       if (msg.status === 'accepted') {
         showToast(`${msg.username} accepted your request!`);
         if (modalOpen && activeReqTab === 'outgoing') switchReqTab('outgoing');
-        // Reload sidebar so new friend appears
         sidebarAllLoaded = false;
         sidebarOldestId = 999999999;
         sidebarMap.clear();
@@ -1532,7 +1894,7 @@ function connectWebSocket(token) {
     }
   };
 
-  ws.onclose = () => setTimeout(() => connectWebSocket(token), 3000);
+  ws.onclose = () => setTimeout(() => connectWebSocket(), 3000);
 }
 
 // ── PROFILE ──
@@ -1694,17 +2056,15 @@ function onSidebarSearch(value) {
   const q = value.trim();
 
   if (!q) {
-    // Restore normal sidebar
     document.querySelector('.sidebar-section-label').textContent = 'Recent';
     renderSidebar();
     return;
   }
 
-  // Debounce 300ms then hit API
   sidebarSearchTimer = setTimeout(async () => {
-      const res = await fetch(`${API}/search_sidebar/${encodeURIComponent(q)}`, { credentials: 'include' });
+    const res = await fetch(`${API}/search_sidebar/${encodeURIComponent(q)}`, { credentials: 'include' });
     if (!res.ok) return;
-    const results = await res.json(); // [[username], ...]
+    const results = await res.json();
 
     const label = document.querySelector('.sidebar-section-label');
     label.textContent = 'Results';
@@ -1735,7 +2095,7 @@ function onSidebarSearch(value) {
 }
 
 // ── CHAT SEARCH ──
-let chatSearchResults = []; // [{id, sender, content, sent_at}]
+let chatSearchResults = [];
 let chatSearchIdx = 0;
 let chatSearchTimer = null;
 let chatSearchOldestId = 999999999;
@@ -1759,7 +2119,6 @@ function closeChatSearch() {
   chatSearchResults = [];
   chatSearchIdx = 0;
   chatSearchOldestId = 999999999;
-  // Remove highlights
   document.querySelectorAll('.msg-row.search-match').forEach(el => el.classList.remove('search-match'));
 }
 
@@ -1784,13 +2143,12 @@ async function runChatSearch(q) {
   const res = await fetch(`${API}/search_chat/${activeChat.chat_id}/${encodeURIComponent(q)}/${chatSearchOldestId}`, { credentials: 'include' });
   if (!res.ok) return;
   const rows = await res.json();
-  // rows: [id, sender, content, sent_at]
+
   if (!rows || !rows.length) {
     document.getElementById('chat-search-count').textContent = 'No results';
     return;
   }
 
-  // Results come back DESC (newest first) — keep that order for navigation
   chatSearchResults = rows.map(r => ({ id: r[0], sender: r[1], content: r[2], sent_at: r[3] }));
   chatSearchIdx = 0;
   updateChatSearchCount();
@@ -1821,7 +2179,6 @@ function scrollToSearchResult(idx) {
 
   document.querySelectorAll('.msg-row.search-match').forEach(el => el.classList.remove('search-match'));
 
-  // Already in DOM — just highlight and scroll
   const el = document.querySelector(`.msg-row[data-id="${match.id}"]`);
   if (el) {
     el.classList.add('search-match');
@@ -1829,7 +2186,6 @@ function scrollToSearchResult(idx) {
     return;
   }
 
-  // Not in DOM — jump to that point in history
   jumpToMessage(match);
 }
 
@@ -1837,7 +2193,6 @@ async function jumpToMessage(match) {
   if (!activeChat) return;
   const { chat_id } = activeChat;
 
-  // Fetch 50 messages before and 50 after in parallel
   const [beforeRes, afterRes] = await Promise.all([
     fetch(`${API}/load_chat/${match.id + 1}/${chat_id}`, { credentials: 'include' }),
     fetch(`${API}/load_chat_after/${match.id - 1}/${chat_id}`, { credentials: 'include' })
@@ -1846,14 +2201,13 @@ async function jumpToMessage(match) {
   const afterRows = await afterRes.json();
 
   const before = (beforeRows || [])
-    .map(r => ({ id: r[0], chat_id: r[1], sender: r[2], content: r[3], sent_at: r[4] }))
-    .reverse(); // load_chat returns DESC, reverse to chronological
+    .map(r => ({ id: r[0], chat_id: r[1], sender: r[2], content: r[3], sent_at: r[4], replied_to: r[5] ?? null, replied_content: null }))
+    .reverse();
   const after = (afterRows || [])
-    .map(r => ({ id: r[0], chat_id: r[1], sender: r[2], content: r[3], sent_at: r[4] })); // load_chat_after returns ASC
+    .map(r => ({ id: r[0], chat_id: r[1], sender: r[2], content: r[3], sent_at: r[4], replied_to: r[5] ?? null, replied_content: null }));
 
-  const matchMsg = { id: match.id, chat_id, sender: match.sender, content: match.content, sent_at: match.sent_at };
+  const matchMsg = { id: match.id, chat_id, sender: match.sender, content: match.content, sent_at: match.sent_at, replied_to: null, replied_content: null };
 
-  // Replace the loaded message window with this slice
   activeChat.messages = [...before, matchMsg, ...after];
   activeChat.oldestId = before.length ? before[0].id : match.id;
   activeChat.hasMore = before.length >= 50;
@@ -1874,20 +2228,22 @@ function closeChatMobile() {
   document.querySelector('.sidebar').classList.remove('hidden');
   document.querySelector('.main').classList.remove('visible');
   activeChat = null;
+  clearReply();
+  document.getElementById('typing-pill').classList.remove('visible');
   history.pushState({}, '', window.location.pathname);
 }
 
-// Handle browser back/forward
 window.addEventListener('popstate', (e) => {
   const chat_id = e.state?.chat_id;
   if (chat_id && sidebarMap.has(chat_id)) {
     openChat(chat_id);
   } else {
     activeChat = null;
+    clearReply();
+    document.getElementById('typing-pill').classList.remove('visible');
     document.getElementById('chat-area').classList.remove('visible');
     document.getElementById('chat-area').style.display = 'none';
     document.getElementById('empty-state').style.display = '';
-    // Mobile: show sidebar again
     if (window.innerWidth <= 768) {
       document.querySelector('.sidebar').classList.remove('hidden');
       document.querySelector('.main').classList.remove('visible');
