@@ -283,6 +283,11 @@ body {
   30% { transform: translateY(-3px); opacity: 1; }
 }
 
+@keyframes fadeInPill {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .contact-meta {
   display: flex;
   flex-direction: column;
@@ -365,29 +370,6 @@ body {
 .chat-header-info { flex: 1; }
 .chat-header-name { font-size: 14px; font-weight: 600; color: var(--text); }
 
-/* Floating typing pill inside messages area */
-.typing-pill {
-  display: none;
-  align-self: center;
-  align-items: center;
-  gap: 8px;
-  background: var(--surface2);
-  border: 1px solid var(--border2);
-  border-radius: 20px;
-  padding: 6px 14px;
-  font-size: 12.5px;
-  color: var(--text-muted);
-  margin: 4px 0 2px;
-  animation: fadeInPill 0.2s ease;
-}
-
-.typing-pill.visible { display: flex; }
-
-@keyframes fadeInPill {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
 .typing-dots {
   display: inline-flex;
   gap: 3px;
@@ -428,10 +410,34 @@ body {
   flex: 1;
   overflow-y: auto;
   padding: 20px;
+  padding-bottom: 8px;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  position: relative;
 }
+
+/* Typing pill floats at the bottom-center of the messages area */
+.typing-pill {
+  display: none;
+  position: sticky;
+  bottom: 8px;
+  align-self: center;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  padding: 5px 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  z-index: 5;
+  pointer-events: none;
+  animation: fadeInPill 0.2s ease;
+}
+
+.typing-pill.visible { display: flex; }
 
 .messages-area::-webkit-scrollbar { width: 4px; }
 .messages-area::-webkit-scrollbar-track { background: transparent; }
@@ -537,6 +543,7 @@ body {
   font-size: 13.5px;
   line-height: 1.5;
   word-break: break-word;
+  white-space: pre-wrap;
 }
 
 .msg-row:not(.mine) .msg-bubble { background: var(--surface2); color: var(--text); border-bottom-left-radius: 3px; }
@@ -550,6 +557,17 @@ body {
   line-height: 1.4;
   border-left: 3px solid rgba(255,255,255,0.3);
   margin-bottom: -4px;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.reply-quote-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
 }
 
 .msg-row:not(.mine) .reply-quote {
@@ -1058,6 +1076,18 @@ body {
 }
 .msg-row.search-match .msg-bubble { outline: 1px solid var(--accent); outline-offset: 2px; border-radius: 12px; }
 
+/* Flash animation when jumping to a quoted message */
+@keyframes msgFlash {
+  0%   { background: transparent; }
+  20%  { background: rgba(91,106,240,0.18); }
+  100% { background: transparent; }
+}
+
+.msg-row.flash-highlight {
+  border-radius: var(--radius-sm);
+  animation: msgFlash 1.1s ease forwards;
+}
+
 .sidebar-section-label.search-label { color: var(--accent); }
 .contact-item.search-result-item .contact-preview { color: var(--text-muted); }
 </style>
@@ -1153,10 +1183,11 @@ body {
       </div>
     </div>
 
-    <div class="messages-area" id="messages-area"></div>
-    <div class="typing-pill" id="typing-pill">
-      <span class="typing-dots"><span></span><span></span><span></span></span>
-      <span id="typing-pill-name"></span> is typing
+    <div class="messages-area" id="messages-area">
+      <div class="typing-pill" id="typing-pill">
+        <span class="typing-dots"><span></span><span></span><span></span></span>
+        <span id="typing-pill-name"></span> is typing
+      </div>
     </div>
 
     <!-- REPLY BAR -->
@@ -1254,9 +1285,7 @@ body {
 <div class="toast" id="toast"><div class="toast-dot"></div><span id="toast-msg"></span></div>
 
 <script>
-// const API = 'https://pulsechat.qzz.io';
 const API = 'http://127.0.0.1:8000';
-
 let ws;
 let currentUsername;
 let originalAbout = '';
@@ -1404,6 +1433,59 @@ function setReply(msg) {
 function clearReply() {
   replyingTo = null;
   document.getElementById('reply-bar').classList.remove('visible');
+}
+
+// ── SCROLL TO ORIGINAL MESSAGE (click on reply quote) ──
+async function scrollToMsg(msgId) {
+  // 1. Try to find it in current DOM
+  const el = document.querySelector(`.msg-row[data-id="${msgId}"]`);
+  if (el) {
+    flashMsg(el);
+    return;
+  }
+
+  // 2. Not in DOM — load messages around it (same as jumpToMessage)
+  if (!activeChat) return;
+  const { chat_id } = activeChat;
+
+  const [beforeRes, afterRes] = await Promise.all([
+    fetch(`${API}/load_chat/${msgId + 1}/${chat_id}`, { credentials: 'include' }),
+    fetch(`${API}/load_chat_after/${msgId - 1}/${chat_id}`, { credentials: 'include' })
+  ]);
+  const beforeRows = await beforeRes.json();
+  const afterRows = await afterRes.json();
+
+  const before = (beforeRows || [])
+    .map(r => ({ id: r[0], chat_id: r[1], sender: r[2], content: r[3], sent_at: r[4], replied_to: r[5] ?? null, replied_content: null }))
+    .reverse();
+  const after = (afterRows || [])
+    .map(r => ({ id: r[0], chat_id: r[1], sender: r[2], content: r[3], sent_at: r[4], replied_to: r[5] ?? null, replied_content: null }));
+
+  // Reconstruct the target message from in-memory if possible, else from surrounding fetch
+  const allFetched = [...before, ...after];
+  const targetRaw = allFetched.find(x => x.id === msgId);
+  const matchMsg = targetRaw || { id: msgId, chat_id, sender: '?', content: '…', sent_at: null, replied_to: null, replied_content: null };
+
+  activeChat.messages = [...before, matchMsg, ...after];
+  activeChat.oldestId = before.length ? before[0].id : msgId;
+  activeChat.hasMore = before.length >= 50;
+  activeChat.hasNewer = after.length >= 50;
+
+  renderMessages();
+
+  setTimeout(() => {
+    const target = document.querySelector(`.msg-row[data-id="${msgId}"]`);
+    if (target) flashMsg(target);
+  }, 50);
+}
+
+function flashMsg(el) {
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.remove('flash-highlight');
+  // Force reflow so animation replays
+  void el.offsetWidth;
+  el.classList.add('flash-highlight');
+  setTimeout(() => el.classList.remove('flash-highlight'), 1200);
 }
 
 // ── INIT ──
@@ -1582,10 +1664,13 @@ async function openChat(chat_id) {
     pill.classList.add('visible');
   }
 
-  document.getElementById('messages-area').innerHTML = '';
+  // Clear messages but keep the typing pill in the DOM
+  const area = document.getElementById('messages-area');
+  // const pill = document.getElementById('typing-pill');
+  Array.from(area.children).forEach(child => { if (child !== pill) child.remove(); });
   await loadMoreMessages();
 
-  const area = document.getElementById('messages-area');
+  // const area = document.getElementById('messages-area');
   area.scrollTop = area.scrollHeight;
 
   if (activeChat.messages.length) {
@@ -1637,6 +1722,7 @@ function renderMessages(scrollToBottom = false) {
   const area = document.getElementById('messages-area');
   const wasAtBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 60;
 
+  // Build HTML for messages only (pill element stays in DOM separately)
   let html = '';
 
   if (activeChat.hasMore) {
@@ -1655,21 +1741,19 @@ function renderMessages(scrollToBottom = false) {
     const isMine = m.sender === currentUsername;
     const theirAvatar = `<div class="msg-avatar-sm" style="background:${bg}20;color:${fg}">${initials(activeChat.username)}</div>`;
 
-    // Build reply quote if this message is a reply
+    // Reply quote: look up content from in-memory messages first, then WS echo field
     let replyQuoteHtml = '';
-    if (m.replied_to !== null) {
-      // Look up the quoted message in memory first, then fall back to replied_content from WS echo
+    if (m.replied_to !== null && m.replied_to !== undefined) {
       const quotedMsg = activeChat.messages.find(x => x.id === m.replied_to);
       const quotedContent = quotedMsg ? quotedMsg.content : (m.replied_content || '…');
       const quotedSender = quotedMsg ? quotedMsg.sender : (isMine ? activeChat.username : currentUsername);
       replyQuoteHtml = `
-        <div class="reply-quote">
+        <div class="reply-quote" onclick="scrollToMsg(${m.replied_to})" title="Jump to original">
           <div class="reply-quote-sender">${escapeHtml(quotedSender)}</div>
-          <div>${escapeHtml(String(quotedContent))}</div>
+          <div class="reply-quote-text">${escapeHtml(String(quotedContent))}</div>
         </div>`;
     }
 
-    // Safe content for inline onclick attribute
     const safeContent = m.content.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,' ');
     const safeSender = m.sender.replace(/'/g,"\\'");
 
@@ -1695,7 +1779,14 @@ function renderMessages(scrollToBottom = false) {
     html += `<button class="load-more-btn" onclick="loadNewerMessages()">Load newer messages</button>`;
   }
 
-  area.innerHTML = html;
+  // Preserve the typing pill — remove all non-pill children, then insert new ones before it
+  const pill = document.getElementById('typing-pill');
+  // Remove everything except the pill
+  Array.from(area.children).forEach(child => {
+    if (child !== pill) child.remove();
+  });
+  // Insert new HTML before the pill
+  pill.insertAdjacentHTML('beforebegin', html);
 
   if (scrollToBottom || wasAtBottom) {
     area.scrollTop = area.scrollHeight;
@@ -1786,9 +1877,7 @@ function sendReadReceipt(chat_id, msg_id) {
 
 // ── WEBSOCKET ──
 function connectWebSocket() {
-  // ws = new WebSocket(`wss://pulsechat.qzz.io/pulse`);
   ws = new WebSocket(`ws://127.0.0.1:8000/pulse`);
-
 
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
