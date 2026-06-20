@@ -15,7 +15,10 @@ import redis.asyncio as redis
 import json
 import hashlib
 import ssl
+import httpx
+from typing import Optional
 
+load_dotenv()
 
 DB_HOST = os.getenv("DB_HOST")
 DB_USER = os.getenv("DB_USER")
@@ -24,32 +27,32 @@ DB_NAME = os.getenv("DB_NAME")
 REDIS_HOST = os.getenv("REDIS_HOST")
 REDIS_PORT = int(os.getenv("REDIS_PORT"))
 ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "").split(",")
-cert_content= os.getenv("DB_CERT")
-DB_PORT= int(os.getenv("DB_PORT"))
+# cert_content= os.getenv("DB_CERT")
+# DB_PORT= int(os.getenv("DB_PORT"))
 
-# r=redis.Redis(host=REDIS_HOST,port=REDIS_PORT,decode_responses=True)
-r=redis.from_url(os.getenv("REDIS_URL"),decode_responses=True)
+r=redis.Redis(host=REDIS_HOST,port=REDIS_PORT,decode_responses=True)
+# r=redis.from_url(os.getenv("REDIS_URL"),decode_responses=True)
 async def get_connection(db_name):
     """
      connects to database and return the connection (MYSQL)
     """
-    # return await aiomysql.connect(
-    #     host=DB_HOST,
-    #     user=DB_USER,
-    #     password=DB_PASSWORD,
-    #     db=db_name
-    # )
-    ssl_context = ssl.create_default_context()
-    ssl_context.load_verify_locations(cadata=cert_content)
-
     return await aiomysql.connect(
         host=DB_HOST,
         user=DB_USER,
         password=DB_PASSWORD,
-        port=DB_PORT,
-        db=db_name,
-        ssl=ssl_context
+        db=db_name
     )
+    # ssl_context = ssl.create_default_context()
+    # ssl_context.load_verify_locations(cadata=cert_content)
+
+    # return await aiomysql.connect(
+    #     host=DB_HOST,
+    #     user=DB_USER,
+    #     password=DB_PASSWORD,
+    #     port=DB_PORT,
+    #     db=db_name,
+    #     ssl=ssl_context
+    # )
 
 
 
@@ -105,7 +108,6 @@ def isValidPassword(password):
 
     return None
 
-load_dotenv()
 SECRET_KEY=os.getenv("JWT_SECRET")
 
 def generate_token(email,username):
@@ -200,8 +202,8 @@ async def signup(x:user_input_signup):
                 key="token",
                 value=generate_token(email,username),
                 httponly=True,
-                secure=True,
-                samesite="none",
+                secure=False,
+                samesite="lax",
                 max_age=60*60*24
             )
             
@@ -278,8 +280,8 @@ async def login(x:user_input):
                 key="token",
                 value=generate_token(email,creds[1]),
                 httponly=True,
-                secure=True,
-                samesite="none",
+                secure=False,
+                samesite="lax",
                 max_age=60*60*24
             )
             
@@ -389,8 +391,8 @@ async def logout(request:Request,response: Response):
         response.delete_cookie(
             key="token",
             httponly=True,
-            secure=True,
-            samesite="none"
+            secure=False,
+            samesite="lax"
         )
         return response
 
@@ -413,14 +415,14 @@ async def requests_count(request:Request):
         payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
         cached=await r.get(f"req_count:{payload['username']}")
         if cached is not None:
-            return json.loads(cached)
+            return {"requests_count":cached}
 
         await cursor.execute(query,(payload["username"],))
         req_count=await cursor.fetchone()
         data={
             "requests_count":req_count[0]
         }
-        await r.set(f"req_count:{payload['username']}",json.dumps(data))
+        await r.set(f"req_count:{payload['username']}",req_count[0])
         return data
     finally:
         await cursor.close()
@@ -518,7 +520,8 @@ async def socket_manager(websocket: WebSocket):
                 cursor=await connection.cursor()
                 try:
                     await cursor.execute(query1,(data["id"],))
-                    await r.decr(f"req_count:{payload['username']}")
+                    if await r.exists(f"req_count:{payload['username']}"):
+                        await r.decr(f"req_count:{payload['username']}")
                     if data["status"]=="accept":
                         query2="INSERT INTO friends (user1,user2,friend_date,chat_id) VALUES(%s,%s,%s,%s)"
                         friend_date=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
@@ -611,7 +614,8 @@ async def socket_manager(websocket: WebSocket):
                     query5="SELECT LAST_INSERT_ID()"
                     
                     await cursor.execute(query4,(payload["username"],data["username"],req_time))
-                    await r.incr(f"req_count:{data['username']}")
+                    if await r.exists(f"req_count:{data['username']}"):
+                        await r.incr(f"req_count:{data['username']}")
                     await connection.commit()
                     await cursor.execute(query5)
                     e=await cursor.fetchone()
@@ -635,7 +639,8 @@ async def socket_manager(websocket: WebSocket):
                 cursor=await connection.cursor()
                 try:
                     await cursor.execute(query1,(data["id"],))
-                    await r.decr(f"req_count:{data['username']}")
+                    if await r.exists(f"req_count:{data['username']}"):
+                        await r.decr(f"req_count:{data['username']}")
                     await connection.commit()
                     for soc in user_socket.get(payload["username"],[]):
                         await safe_send(soc,json.dumps({
@@ -668,15 +673,19 @@ async def socket_manager(websocket: WebSocket):
                         continue
                     if data["username"] not in members:
                         continue
-                    replied=data["replied_to"]
+                    replied=data.get("replied_to")
+                    replied_content=None
                     await cursor.execute(query1,(data["chat_id"],payload["username"],data["content"],sent_time,replied))
                     if replied is not None:
                         await cursor.execute(query3,(replied,))
-                        replied_content=await cursor.fetchone()
+                        replied_msg=await cursor.fetchone()
+                        replied_content=replied_msg[0]
 
                     query2="SELECT LAST_INSERT_ID()"
                     await cursor.execute(query2)
                     res=await cursor.fetchone()
+                    await r.delete(f"sidebar:{payload['username']}")
+                    await r.delete(f"sidebar:{data['username']}")
                     for soc in user_socket.get(payload["username"],[]):
                         await safe_send(soc,json.dumps({
                             "type":"sent_message",
@@ -685,8 +694,8 @@ async def socket_manager(websocket: WebSocket):
                             "sent_at":sent_time,
                             "id":res[0],
                             "sender":payload["username"],
-                            "replied_to":data["replied_to"],
-                            "replied_content":replied_content[0]
+                            "replied_to":replied,
+                            "replied_content":replied_content
                         }))
                     for soc in user_socket.get(data["username"],[]):
                         await safe_send(soc,json.dumps({
@@ -696,8 +705,8 @@ async def socket_manager(websocket: WebSocket):
                             "sent_at":sent_time,
                             "id":res[0],
                             "sender":payload["username"],
-                            "replied_to":data["replied_to"],
-                            "replied_content":replied_content[0]
+                            "replied_to":replied,
+                            "replied_content":replied_content
                         }))
                 finally:
                     await connection.commit()
@@ -723,7 +732,7 @@ async def socket_manager(websocket: WebSocket):
                     await cursor.close()
                     connection.close()
             elif data["type"]=="typing":
-                if r.exists(f"typing:{payload['username']}:{data['username']}"):
+                if await r.exists(f"typing:{payload['username']}:{data['username']}"):
                     continue
                 await r.setex(f"typing:{payload['username']}:{data['username']}",3,1)
                 for soc in user_socket.get(data['username'],[]):
@@ -799,13 +808,15 @@ async def load_sidebar(request:Request,id: int,chat_id:str):
         payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
 
         query = """
-                SELECT a.id,a.chat_id,a.sender,a.content,a.sent_at,a.replied_to FROM chats as a
-                LEFT JOIN chats as b
-                ON a.replied_to=b.id
-                WHERE a.chat_id=%s AND a.id<%s
-                ORDER BY a.id DESC
-                LIMIT 50
-            """
+    SELECT a.id, a.chat_id, a.sender, a.content, a.sent_at, a.replied_to,
+           att.public_url, att.content_type, att.original_name, att.size_bytes
+    FROM chats a
+    LEFT JOIN attachments att ON att.id = a.attachment_id
+    LEFT JOIN chats b ON a.replied_to = b.id
+    WHERE a.chat_id=%s AND a.id<%s
+    ORDER BY a.id DESC
+    LIMIT 50
+"""
         await cursor.execute(query,(chat_id,id))
         
         result=await cursor.fetchall()
@@ -827,13 +838,15 @@ async def load_chat_after(request:Request, id: int, chat_id: str):
         payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
 
         query = """
-                SELECT a.id,a.chat_id,a.sender,a.content,a.sent_at,a.replied_to FROM chats as a
-                LEFT JOIN chats as b
-                ON a.replied_to=b.id
-                WHERE a.chat_id=%s AND a.id>%s
-                ORDER BY a.id ASC
-                LIMIT 50
-            """
+            SELECT a.id, a.chat_id, a.sender, a.content, a.sent_at, a.replied_to,
+                att.public_url, att.content_type, att.original_name, att.size_bytes
+            FROM chats a
+            LEFT JOIN attachments att ON att.id = a.attachment_id
+            LEFT JOIN chats b ON a.replied_to = b.id
+            WHERE a.chat_id=%s AND a.id>%s
+            ORDER BY a.id DESC
+            LIMIT 50
+        """
         await cursor.execute(query,(chat_id,id))
         
         result=await cursor.fetchall()
@@ -896,3 +909,201 @@ async def search_chat(request:Request,chat_id:str,input:str,id:int):
     finally:
         await cursor.close()
         connection.close()
+
+
+S3_TOKEN=os.getenv("S3_TOKEN")
+
+class file_details(BaseModel):
+    filename:str
+    content_type:str
+    size_bytes:int
+
+
+
+
+def is_valid_filename(filename: str):
+    if not filename:
+        return False
+
+    if len(filename) > 255:
+        return False
+
+    # no leading/trailing spaces
+    if filename != filename.strip():
+        return False
+
+    # block path traversal
+    if "/" in filename or "\\" in filename:
+        return False
+
+    # block weird names
+    if filename in [".", ".."]:
+        return False
+
+    # allow letters, numbers, spaces, dots, dashes, underscores
+    if not re.fullmatch(r"[A-Za-z0-9._\- ]+", filename):
+        return False
+
+    return True
+
+
+
+
+@app.post("/upload_media/{chat_id}")
+async def upload_media(request:Request,chat_id:str,file:file_details):
+    token=request.cookies.get("token")
+    try:
+        if await r.exists(f"blacklist:{token}"):
+            return
+        payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+        
+
+        ALLOWED_CONTENT_TYPES = [
+        # Images
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/gif",
+        "image/avif",
+
+        # Videos
+        "video/mp4",
+        "video/webm",
+        "video/quicktime",
+
+        # Audio
+        "audio/mpeg",
+        "audio/mp4",
+        "audio/wav",
+        "audio/webm",
+        "audio/ogg",
+
+        # Documents
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+
+        # Text
+        "text/plain",
+
+        # Archives
+        "application/zip",
+        "application/x-zip-compressed",
+        ]
+
+
+
+
+        if file.size_bytes >=10*1024*1024 or file.size_bytes<=0:
+            raise HTTPException(status_code=413,detail="File too large")
+        if file.content_type not in ALLOWED_CONTENT_TYPES:
+            raise HTTPException(status_code=400,detail="Unsupported file type")
+        if is_valid_filename(file.filename)==False:
+            raise HTTPException(status_code=400,detail="Filename is invalid")
+        async with httpx.AsyncClient() as client:
+            response=await client.post("https://putput.io/api/v1/upload/presign",
+                                            headers={
+                                                "Authorization":f"Bearer {S3_TOKEN}",
+                                                "Content-Type":"application/json"
+                                            },
+                                            json={
+                                                "filename":file.filename,
+                                                "content_type":file.content_type,
+                                                "size_bytes":file.size_bytes
+                                            })
+        data=response.json()
+        return JSONResponse(
+                content=data,
+                status_code=response.status_code
+            )
+    except:
+        pass
+
+class upload_id(BaseModel):
+    uploadid:str
+    message:Optional[str]=None
+    username:str
+    id:Optional[int]=None
+    replied_content:Optional[str]=None
+@app.post("/confirm_media/{chat_id}")
+async def confirm_media(request:Request,chat_id:str,x:upload_id):
+    token=request.cookies.get("token")
+    try:
+        if await r.exists(f"blacklist:{token}"):
+            return
+        payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+        async with httpx.AsyncClient() as client:
+            response=await client.post("https://putput.io/api/v1/upload/confirm",headers={
+                                                        "Authorization":f"Bearer {S3_TOKEN}",
+                                                    "Content-Type":"application/json"
+                                                },
+                                                json={
+                                                    "upload_id":x.uploadid
+                                                })
+            
+        query="INSERT INTO attachments (upload_id,file_id,public_url,original_name,content_type,size_bytes) VALUES(%s,%s,%s,%s,%s,%s)"
+        query1="SELECT LAST_INSERT_ID()"
+        query2="INSERT INTO chats (chat_id,sender,content,sent_at,replied_to,content_type,attachment_id) VALUES(%s,%s,%s,%s,%s,%s,%s)"
+        sent_time=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+        
+        data=response.json()
+        if response.status_code!=200:
+            return JSONResponse(
+                content=data,
+                status_code=response.status_code
+            )
+        else:
+            data=data["file"]
+
+            connection=await get_connection("chat_db")
+            cursor=await connection.cursor()
+            
+            await cursor.execute(query,(x.uploadid,data["id"],data["public_url"],data["original_name"],data["content_type"],data["size_bytes"]))
+            await cursor.execute(query1)
+            res=await cursor.fetchone()
+            await cursor.execute(query2,(chat_id,payload['username'],x.message,sent_time,x.id,data["content_type"],res[0]))
+            await cursor.execute(query1)
+            res=await cursor.fetchone()
+            await connection.commit()
+
+            for soc in user_socket.get(payload["username"],[]):
+                await safe_send(soc,json.dumps({
+                    "type":"sent_attachment",
+                    "content":x.message,
+                    "chat_id":chat_id,
+                    "sent_at":sent_time,
+                    "id":res[0],
+                    "sender":payload["username"],
+                    "replied_to":x.id,
+                    "replied_content":x.replied_content,
+                    "attachment_url":data["public_url"],
+                    "content_type": data["content_type"],
+                    "original_name": data["original_name"],
+                    "size_bytes": data["size_bytes"]
+
+                }))
+            for soc in user_socket.get(x.username,[]):
+                await safe_send(soc,json.dumps({
+                    "type":"receive_attachment",
+                    "content":x.message,
+                    "chat_id":chat_id,
+                    "sent_at":sent_time,
+                    "id":res[0],
+                    "sender":payload["username"],
+                    "replied_to":x.id,
+                    "replied_content":x.replied_content,
+                    "attachment_url":data["public_url"],
+                    "content_type": data["content_type"],
+                    "original_name": data["original_name"],
+                    "size_bytes": data["size_bytes"]
+                }))
+
+            return {
+                "attachment_url":data["public_url"]
+            }
+    finally:
+        if cursor:
+            await cursor.close()
+        if connection:
+            connection.close()
