@@ -737,7 +737,7 @@ async def socket_manager(websocket: WebSocket):
             elif data["type"]=="typing":
                 if await r.exists(f"typing:{payload['username']}:{data['chat_id']}"):
                     continue
-                conn=await get_connection("chat_db")
+                conn=await get_connection(DB_NAME)
                 cursor=await conn.cursor()
                 try:
                     await r.setex(f"typing:{payload['username']}:{data['chat_id']}",3,1)
@@ -758,7 +758,7 @@ async def socket_manager(websocket: WebSocket):
                     conn.close()
             elif data["type"]=="send_message_grp":
                 sent_time=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-                connection=await get_connection("chat_db")
+                connection=await get_connection(DB_NAME)
                 cursor=await connection.cursor()
                 query1="SELECT a.user1,b.group_name FROM friends as a LEFT JOIN groups_metadata as b ON a.chat_id=b.chat_id WHERE a.chat_id=%s"
                 query2="INSERT INTO chats (chat_id,sender,content,sent_at,replied_to) VALUES(%s,%s,%s,%s,%s)"
@@ -1135,7 +1135,7 @@ async def confirm_media(request:Request,chat_id:str,x:upload_id):
         else:
             data=data["file"]
 
-            connection=await get_connection("chat_db")
+            connection=await get_connection(DB_NAME)
             cursor=await connection.cursor()
             
             await cursor.execute(query,(x.uploadid,data["id"],data["public_url"],data["original_name"],data["content_type"],data["size_bytes"]))
@@ -1206,7 +1206,7 @@ class grp(BaseModel):
 @app.get("/friends_list/{user}")
 async def friends_list(request:Request,user:str):
     token=request.cookies.get("token")
-    connection=await get_connection("chat_db")
+    connection=await get_connection(DB_NAME)
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -1226,7 +1226,7 @@ async def friends_list(request:Request,user:str):
 @app.post("/create_group")
 async def create_grp(request:Request,x:grp):
     token=request.cookies.get("token")
-    connection=await get_connection("chat_db")
+    connection=await get_connection(DB_NAME)
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -1279,7 +1279,7 @@ async def create_grp(request:Request,x:grp):
 @app.get("/grp_members/{chat_id}")
 async def grp_members(chat_id:str,request:Request):
     token=request.cookies.get("token")
-    connection=await get_connection("chat_db")
+    connection=await get_connection(DB_NAME)
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -1296,7 +1296,7 @@ async def grp_members(chat_id:str,request:Request):
 @app.post("/add_to_group/{chat_id}")
 async def add_to_grp(request:Request,x:grp,chat_id:str):
     token=request.cookies.get("token")
-    connection=await get_connection("chat_db")
+    connection=await get_connection(DB_NAME)
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
