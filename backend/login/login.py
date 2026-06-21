@@ -28,32 +28,32 @@ DB_NAME = os.getenv("DB_NAME")
 REDIS_HOST = os.getenv("REDIS_HOST")
 REDIS_PORT = int(os.getenv("REDIS_PORT"))
 ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "").split(",")
-# cert_content= os.getenv("DB_CERT")
-# DB_PORT= int(os.getenv("DB_PORT"))
+cert_content= os.getenv("DB_CERT")
+DB_PORT= int(os.getenv("DB_PORT"))
 
-r=redis.Redis(host=REDIS_HOST,port=REDIS_PORT,decode_responses=True)
-# r=redis.from_url(os.getenv("REDIS_URL"),decode_responses=True)
+# r=redis.Redis(host=REDIS_HOST,port=REDIS_PORT,decode_responses=True)
+r=redis.from_url(os.getenv("REDIS_URL"),decode_responses=True)
 async def get_connection(db_name):
     """
      connects to database and return the connection (MYSQL)
     """
-    return await aiomysql.connect(
-        host=DB_HOST,
-        user=DB_USER,
-        password=DB_PASSWORD,
-        db=db_name
-    )
-    # ssl_context = ssl.create_default_context()
-    # ssl_context.load_verify_locations(cadata=cert_content)
-
     # return await aiomysql.connect(
     #     host=DB_HOST,
     #     user=DB_USER,
     #     password=DB_PASSWORD,
-    #     port=DB_PORT,
-    #     db=db_name,
-    #     ssl=ssl_context
+    #     db=db_name
     # )
+    ssl_context = ssl.create_default_context()
+    ssl_context.load_verify_locations(cadata=cert_content)
+
+    return await aiomysql.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        port=DB_PORT,
+        db=db_name,
+        ssl=ssl_context
+    )
 
 
 
@@ -203,8 +203,8 @@ async def signup(x:user_input_signup):
                 key="token",
                 value=generate_token(email,username),
                 httponly=True,
-                secure=False,
-                samesite="lax",
+                secure=True,
+                samesite="none",
                 max_age=60*60*24
             )
             
@@ -281,8 +281,8 @@ async def login(x:user_input):
                 key="token",
                 value=generate_token(email,creds[1]),
                 httponly=True,
-                secure=False,
-                samesite="lax",
+                secure=True,
+                samesite="none",
                 max_age=60*60*24
             )
             
@@ -392,8 +392,8 @@ async def logout(request:Request,response: Response):
         response.delete_cookie(
             key="token",
             httponly=True,
-            secure=False,
-            samesite="lax"
+            secure=True,
+            samesite="none"
         )
         return response
 
