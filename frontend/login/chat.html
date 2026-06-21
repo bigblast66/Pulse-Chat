@@ -754,6 +754,60 @@ body::before {
 .req-decline:active { transform: scale(0.95); }
 .empty-requests { padding: 40px 20px; text-align: center; color: var(--text-dim); font-size: 13px; }
 
+/* Create group — member picker */
+.grp-chips-wrap {
+  display: none; flex-wrap: wrap; gap: 6px;
+  padding: 0 20px 14px;
+}
+.grp-chip {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--accent-dim); border: 1px solid var(--border2);
+  border-radius: 20px; padding: 4px 6px 4px 4px;
+  font-size: 12.5px; color: var(--text);
+  animation: chipIn 0.15s ease;
+}
+@keyframes chipIn { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+.grp-chip-avatar {
+  width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 700;
+}
+.grp-chip-remove {
+  width: 16px; height: 16px; border-radius: 50%; border: none;
+  background: rgba(255,255,255,0.08); color: var(--text-dim);
+  display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease;
+}
+.grp-chip-remove:hover { background: rgba(224,92,92,0.2); color: var(--danger); }
+.grp-chip-remove:active { transform: scale(0.88); }
+.grp-chip-remove svg { width: 8px; height: 8px; }
+
+.grp-member-list { padding: 4px 12px 16px; max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.grp-member-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px; border-radius: 10px; cursor: pointer;
+  transition: background 0.18s ease, transform 0.12s ease;
+}
+.grp-member-row:hover { background: rgba(91,106,240,0.06); }
+.grp-member-row:active { transform: scale(0.98); }
+.grp-member-avatar {
+  width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600;
+  border: 1.5px solid rgba(255,255,255,0.06);
+}
+.grp-member-name { flex: 1; font-size: 13.5px; font-weight: 500; color: var(--text); }
+.grp-check {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  border: 1.5px solid var(--border2); background: transparent;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+.grp-check svg { width: 11px; height: 9px; opacity: 0; transform: scale(0.5); transition: opacity 0.15s ease, transform 0.15s ease; }
+.grp-member-row.selected { background: rgba(91,106,240,0.05); }
+.grp-member-row.selected .grp-check { background: var(--accent); border-color: var(--accent); box-shadow: 0 2px 8px var(--accent-glow); }
+.grp-member-row.selected .grp-check svg { opacity: 1; transform: scale(1); }
+
 /* Toast */
 .toast {
   position: fixed; bottom: calc(var(--bottom-nav-h) + 12px + var(--safe-bottom)); left: 50%;
@@ -1045,6 +1099,9 @@ body::before {
         <button class="icon-btn" title="Search in chat" onclick="toggleChatSearch()">
           <svg viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
         </button>
+        <button class="icon-btn" id="add-members-btn" title="Add members" onclick="openAddMembers()" style="display:none;">
+  <svg viewBox="0 0 18 18" fill="none"><circle cx="7" cy="6.5" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M1.5 16c0-3 2.5-5.5 5.5-5.5M13 4v6M10 7h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+</button>
         <button class="icon-btn" title="More options">
           <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="4" r="1" fill="currentColor"/><circle cx="8" cy="8" r="1" fill="currentColor"/><circle cx="8" cy="12" r="1" fill="currentColor"/></svg>
         </button>
@@ -1069,10 +1126,7 @@ body::before {
     </div>
 
     <div class="messages-area" id="messages-area">
-      <div class="typing-pill" id="typing-pill">
-        <span class="typing-dots"><span></span><span></span><span></span></span>
-        <span id="typing-pill-name"></span> is typing
-      </div>
+      <div class="typing-pill" id="typing-pill"></div>
     </div>
 
     <!-- REPLY BAR -->
@@ -1210,19 +1264,20 @@ body::before {
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-header">
-      <span class="modal-title">New Group</span>
+      <span class="modal-title" id="group-modal-title">New Group</span>
       <button class="close-btn" onclick="closeModal('create-group-modal')">
         <svg viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       </button>
     </div>
-    <div class="profile-fields" style="padding-bottom:0">
+    <div class="profile-fields" style="padding-bottom:0" id="grp-name-field">
       <div class="profile-field">
         <label>Group name</label>
         <input type="text" id="grp-name-input" placeholder="e.g. Weekend Trip">
       </div>
     </div>
+    <div id="grp-chips-wrap" class="grp-chips-wrap"></div>
     <div class="sidebar-section-label">Add friends</div>
-    <div id="grp-member-list" style="padding:4px 20px 16px;max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:2px;"></div>
+    <div id="grp-member-list" class="grp-member-list"></div>
     <div class="profile-actions">
       <button class="btn-secondary" onclick="closeModal('create-group-modal')">Cancel</button>
       <button class="btn-primary" id="grp-create-btn" onclick="submitCreateGroup()">Create</button>
@@ -1238,9 +1293,9 @@ body::before {
       <div class="lightbox-size" id="lightbox-size"></div>
     </div>
     <div class="lightbox-actions">
-      <a class="lightbox-btn" id="lightbox-download" title="Download" download>
+      <button class="lightbox-btn" id="lightbox-download" title="Download">
         <svg viewBox="0 0 20 20" fill="none"><path d="M10 3v10M6 9l4 4 4-4M4 16h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </a>
+      </button>
       <button class="lightbox-btn" onclick="closeLightbox()" title="Close">
         <svg viewBox="0 0 20 20" fill="none"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       </button>
@@ -1254,7 +1309,8 @@ body::before {
 <div class="toast" id="toast"><div class="toast-dot"></div><span id="toast-msg"></span></div>
 
 <script>
-const API = 'http://127.0.0.1:8000';
+// const API = 'http://127.0.0.1:8000';
+const API = 'https://pulsechat.qzz.io';
 let ws;
 let currentUsername;
 let originalAbout = '';
@@ -1298,6 +1354,11 @@ function formatTime(dateStr) {
   if (diffD === 1) return 'yday';
   if (diffD < 7) return `${diffD}d`;
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+function toTs(dateStr) {
+  if (!dateStr) return 0;
+  const d = new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z');
+  return d.getTime();
 }
 function formatMsgTime(dateStr) {
   if (!dateStr) return '';
@@ -1346,10 +1407,11 @@ function updateTypingUI(username, chat_id, isTyping) {
   if (entry) {
     const el = document.querySelector(`#sidebar-${chat_id} .contact-preview`);
     if (el) {
-      if (isTyping) {
+      const typers = getTypingUsersForChat(chat_id);
+      if (typers.length) {
         el.className = 'contact-preview typing-preview';
-        el.innerHTML = `<span class="typing-dots-sm"><span></span><span></span><span></span></span> typing…`;
-      } else if (!isAnyoneTypingInChat(chat_id)) {
+        el.innerHTML = `<span class="typing-dots-sm"><span></span><span></span><span></span></span> ${formatTypers(typers)} typing…`;
+      } else {
         el.className = 'contact-preview';
         let previewPrefix = '';
         if (entry.sender === currentUsername) previewPrefix = 'You: ';
@@ -1361,19 +1423,39 @@ function updateTypingUI(username, chat_id, isTyping) {
   if (activeChat && activeChat.chat_id === chat_id) {
     const statusEl = document.getElementById('chat-status');
     const pill = document.getElementById('typing-pill');
-    const nameEl = document.getElementById('typing-pill-name');
-    const stillTyping = getTypingUserForChat(chat_id);
-    if (isTyping || stillTyping) {
+   
+    const typers = getTypingUsersForChat(chat_id);
+    if (typers.length) {
       statusEl.className = 'chat-header-status typing-status';
-      statusEl.innerHTML = `<span class="typing-dots"><span></span><span></span><span></span></span> typing…`;
-      nameEl.textContent = isTyping ? username : stillTyping;
+      statusEl.innerHTML = `<span class="typing-dots"><span></span><span></span><span></span></span> ${formatTypers(typers)} typing…`;
+    
       pill.classList.add('visible');
+      // update pill text directly
+      pill.innerHTML = `<span class="typing-dots"><span></span><span></span><span></span></span> ${formatTypers(typers)} typing`;
     } else {
       statusEl.className = 'chat-header-status';
       statusEl.textContent = activeChat.isGroup ? 'Group' : 'Online';
       pill.classList.remove('visible');
     }
   }
+}
+function getTypingUsersForChat(chat_id) {
+  const prefix = `${chat_id}::`;
+  const users = [];
+  for (const key of typingUsers.keys()) {
+    if (key.startsWith(prefix)) users.push(key.slice(prefix.length));
+  }
+  return users;
+}
+
+function isAnyoneTypingInChat(chat_id) {
+  return getTypingUsersForChat(chat_id).length > 0;
+}
+
+function formatTypers(typers) {
+  if (typers.length === 1) return escapeHtml(typers[0]);
+  if (typers.length === 2) return `${escapeHtml(typers[0])} and ${escapeHtml(typers[1])}`;
+  return `${escapeHtml(typers[0])}, ${escapeHtml(typers[1])} and ${typers.length - 2} more`;
 }
 
 /* ── REPLY ── */
@@ -1385,6 +1467,9 @@ function setReply(msg) {
     msg.content || (msg.attachment_url ? '📎 ' + (msg.original_name || 'Attachment') : '…');
   document.getElementById('reply-bar').classList.add('visible');
   document.getElementById('msg-input').focus();
+}
+function setReplyById(id, sender, content, attUrl, originalName) {
+  setReply({ id, sender, content: content || null, attachment_url: attUrl || null, original_name: originalName || null });
 }
 function clearReply() {
   replyingTo = null;
@@ -1474,11 +1559,11 @@ async function loadSidebar() {
     const rows = await res.json();
     if (!rows || !rows.length) { sidebarAllLoaded = true; return; }
     for (const row of rows) {
-      const [username, chat_id, sender, content, sent_at, last_id, unread_count, group_name] = row;
+      const [username, chat_id, sender, content, sent_at, last_id, unread_count, group_name, activity_ts] = row;
       const isGroup = username === null;
       const displayName = isGroup ? group_name : username;
       if (!sidebarMap.has(chat_id)) {
-        sidebarMap.set(chat_id, { username: displayName, chat_id, sender, content, sent_at, last_id: last_id ?? 0, unread_count: unread_count ?? 0, colorIdx: getColorIdx(displayName), isGroup });
+        sidebarMap.set(chat_id, { username: displayName, chat_id, sender, content, sent_at, last_id: last_id ?? 0, activity: activity_ts ? toTs(activity_ts) : 0, unread_count: unread_count ?? 0, colorIdx: getColorIdx(displayName), isGroup });
       }
     }
     const validIds = rows.map(r => r[5]).filter(id => id !== null);
@@ -1493,7 +1578,7 @@ function onSidebarScroll() {
 }
 function renderSidebar() {
   const list = document.getElementById('contact-list');
-  const sorted = [...sidebarMap.values()].sort((a,b)=>(b.last_id||0)-(a.last_id||0));
+ const sorted = [...sidebarMap.values()].sort((a,b)=>(b.activity||0)-(a.activity||0));
   if (!sorted.length) {
     list.innerHTML = `<div style="padding:24px 12px;text-align:center;color:var(--text-dim);font-size:13px">No conversations yet</div>`;
     return;
@@ -1527,12 +1612,13 @@ function renderSidebar() {
   }).join('');
 }
 function upsertSidebarEntry(chat_id, username, sender, content, sent_at, msg_id, isIncoming, isGroup = false) {
+  const activity = sent_at ? toTs(sent_at) : Date.now();
   if (sidebarMap.has(chat_id)) {
     const e = sidebarMap.get(chat_id);
-    e.sender = sender; e.content = content; e.sent_at = sent_at; e.last_id = msg_id;
+    e.sender = sender; e.content = content; e.sent_at = sent_at; e.last_id = msg_id; e.activity = activity;
     if (isIncoming && !(activeChat && activeChat.chat_id === chat_id)) e.unread_count = (e.unread_count||0)+1;
   } else {
-    sidebarMap.set(chat_id, { username, chat_id, sender, content, sent_at, last_id: msg_id, unread_count: isIncoming ? 1 : 0, colorIdx: getColorIdx(username), isGroup });
+    sidebarMap.set(chat_id, { username, chat_id, sender, content, sent_at, last_id: msg_id, activity, unread_count: isIncoming ? 1 : 0, colorIdx: getColorIdx(username), isGroup });
   }
   renderSidebar();
 }
@@ -1566,12 +1652,13 @@ async function openChat(chat_id) {
   const statusEl = document.getElementById('chat-status');
   statusEl.className = 'chat-header-status';
   statusEl.textContent = entry.isGroup ? 'Group' : 'Online';
+  document.getElementById('add-members-btn').style.display = entry.isGroup ? 'flex' : 'none';
 
   const pill = document.getElementById('typing-pill');
-  const nameEl = document.getElementById('typing-pill-name');
+  // const nameEl = document.getElementById('typing-pill-name');
   pill.classList.remove('visible');
   const initialTyper = getTypingUserForChat(chat_id);
-  if (initialTyper) { nameEl.textContent = initialTyper; pill.classList.add('visible'); }
+  if (initialTyper) {  pill.classList.add('visible'); }
   if (initialTyper) statusEl.className = 'chat-header-status typing-status';
 
   const area = document.getElementById('messages-area');
@@ -1649,7 +1736,9 @@ function renderMessages(scrollToBottom = false) {
     const dateLabel = formatMsgDate(m.sent_at);
     if (dateLabel !== lastDateLabel) { html += `<div class="msg-date-divider">${dateLabel}</div>`; lastDateLabel = dateLabel; }
     const isMine = m.sender === currentUsername;
-    const theirAvatar = `<div class="msg-avatar-sm" style="background:${bg}20;color:${fg}">${initials(activeChat.username)}</div>`;
+    const senderColorIdx = activeChat.isGroup ? getColorIdx(m.sender) : activeChat.colorIdx;
+    const [sbg, sfg] = avatarColors[senderColorIdx];
+    const theirAvatar = `<div class="msg-avatar-sm" style="background:${sbg}20;color:${sfg}">${initials(m.sender)}</div>`;
     let replyQuoteHtml = '';
     if (m.replied_to !== null && m.replied_to !== undefined) {
       const quotedMsg = activeChat.messages.find(x => x.id === m.replied_to);
@@ -1683,18 +1772,23 @@ function renderMessages(scrollToBottom = false) {
       bubbleInner = escapeHtml(m.content || '');
     }
 
-    html += `
-    <div class="msg-row ${isMine?'mine':''}" data-id="${m.id}">
-      ${!isMine ? theirAvatar : ''}
-      <div class="msg-wrap">
-        <button class="reply-btn" onclick="setReply({id:${m.id},sender:'${safeSender}',content:'${safeContent}',attachment_url:${m.attachment_url ? `'${escapeHtml(m.attachment_url)}'` : 'null'},original_name:${m.original_name ? `'${escapeHtml(m.original_name)}'` : 'null'}})" title="Reply">
-          <svg viewBox="0 0 14 14" fill="none"><path d="M1 5h8a4 4 0 0 1 0 8H6M1 5l3-3M1 5l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
-        ${replyQuoteHtml}
-        <div class="msg-bubble">${bubbleInner}</div>
-        <div class="msg-time">${formatMsgTime(m.sent_at)}</div>
-      </div>
-    </div>`;
+    // inside renderMessages(), right before the html += template:
+const replyAttUrl = (m.attachment_url || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+const replyOrigName = (m.original_name || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+
+html += `
+<div class="msg-row ${isMine?'mine':''}" data-id="${m.id}">
+  ${!isMine ? theirAvatar : ''}
+  <div class="msg-wrap">
+    <button class="reply-btn" onclick="setReplyById(${m.id},'${safeSender}','${safeContent}','${replyAttUrl}','${replyOrigName}')" title="Reply">
+      <svg viewBox="0 0 16 16" fill="none"><path d="M6 4L2 8l4 4M2 8h7a4 4 0 0 1 4 4v1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    ${!isMine && activeChat.isGroup ? `<div class="msg-sender-name" style="font-size:11px;font-weight:600;color:${avatarColors[getColorIdx(m.sender)][1]};margin-bottom:2px;padding:0 4px;">${escapeHtml(m.sender)}</div>` : ''}
+    ${replyQuoteHtml}
+    <div class="msg-bubble">${bubbleInner}</div>
+    <div class="msg-time">${formatMsgTime(m.sent_at)}</div>
+  </div>
+</div>`;
   }
   if (!activeChat.messages.length && !activeChat.hasMore) html = `<div style="text-align:center;color:var(--text-dim);font-size:13px;margin-top:40px">No messages yet. Say hi!</div>`;
   if (activeChat.hasNewer) html += `<button class="load-more-btn" onclick="loadNewerMessages()">Load newer messages</button>`;
@@ -1784,7 +1878,11 @@ function sendReadReceipt(chat_id, msg_id) {
 
 /* ── WEBSOCKET ── */
 function connectWebSocket() {
-  ws = new WebSocket(`ws://127.0.0.1:8000/pulse`);
+  // ws = new WebSocket(`ws://127.0.0.1:8000/pulse`);
+  ws = new WebSocket(`wss://pulsechat.qzz.io`);
+
+
+
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
     if (msg.type === 'sent_message') {
@@ -1837,7 +1935,7 @@ function connectWebSocket() {
             username: msg.username,
             chat_id: msg.chat_id,
             sender: null, content: null, sent_at: null,
-            last_id: 0, unread_count: 0,
+            last_id: Date.now(), activity: Date.now(),unread_count: 0,
             colorIdx: getColorIdx(msg.username),
             isGroup: false
           });
@@ -1883,7 +1981,7 @@ function connectWebSocket() {
           username: msg.grp_name,
           chat_id: msg.chat_id,
           sender: null, content: null, sent_at: null,
-          last_id: 0, unread_count: 0,
+          last_id: Date.now(), activity: Date.now(),unread_count: 0,
           colorIdx: getColorIdx(msg.grp_name),
           isGroup: true
         });
@@ -2057,13 +2155,29 @@ function cancelUpload() {
 }
 
 /* ── LIGHTBOX ── */
+async function downloadAttachment(url, name) {
+  try {
+    const res = await fetch(url, { mode: 'cors' });
+    if (!res.ok) throw new Error('bad response');
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = name || 'download';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
+  } catch (err) {
+    window.open(url, '_blank');
+  }
+}
 function openLightbox(url, type, name, sizeStr, caption) {
   const body = document.getElementById('lightbox-body');
   const dl = document.getElementById('lightbox-download');
   document.getElementById('lightbox-name').textContent = name || 'File';
   document.getElementById('lightbox-size').textContent = sizeStr || '';
-  dl.href = url;
-  dl.setAttribute('download', name || 'download');
+  dl.onclick = () => downloadAttachment(url, name || 'download');
 
   if (type === 'image') {
     body.innerHTML = `<img src="${url}" alt="${escapeHtml(name||'')}">`;
@@ -2198,30 +2312,65 @@ function showReqFeedback(msg, ok) {
 
 /* ── CREATE GROUP ── */
 let selectedGroupMembers = new Set();
+let availableGroupFriends = [];
+
+let groupModalMode = 'create';
+let groupModalChatId = null;
+
 function openCreateGroup() {
+  groupModalMode = 'create';
+  groupModalChatId = null;
   selectedGroupMembers.clear();
   document.getElementById('grp-name-input').value = '';
-  const list = document.getElementById('grp-member-list');
-  const friends = [...sidebarMap.values()].filter(e => !e.isGroup).map(e => e.username).sort();
-
-  if (!friends.length) {
-    list.innerHTML = `<div class="empty-requests">No friends yet</div>`;
-  } else {
-    list.innerHTML = friends.map(u => `
-      <label style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;cursor:pointer;">
-        <input type="checkbox" value="${escapeHtml(u)}" onchange="toggleGroupMember(this)">
-        <span style="font-size:13.5px;color:var(--text)">${escapeHtml(u)}</span>
-      </label>`).join('');
-  }
+  document.getElementById('group-modal-title').textContent = 'New Group';
+  document.getElementById('grp-name-field').style.display = '';
+  document.getElementById('grp-create-btn').textContent = 'Create';
+  availableGroupFriends = [...sidebarMap.values()].filter(e => !e.isGroup).map(e => e.username).sort();
+  renderGroupChips();
+  renderGroupMemberList();
   document.getElementById('create-group-modal').classList.add('open');
 }
-function toggleGroupMember(cb) {
-  cb.checked ? selectedGroupMembers.add(cb.value) : selectedGroupMembers.delete(cb.value);
+
+async function openAddMembers() {
+  if (!activeChat || !activeChat.isGroup) return;
+  groupModalMode = 'add';
+  groupModalChatId = activeChat.chat_id;
+  selectedGroupMembers.clear();
+  document.getElementById('group-modal-title').textContent = `Add members to ${activeChat.username}`;
+  document.getElementById('grp-name-field').style.display = 'none';
+  document.getElementById('grp-create-btn').textContent = 'Add';
+
+  let existing = [];
+  try {
+    const res = await fetch(`${API}/grp_members/${activeChat.chat_id}`, { credentials: 'include' });
+    if (res.ok) existing = await res.json();
+  } catch (e) {}
+  const existingSet = new Set(existing);
+
+  availableGroupFriends = [...sidebarMap.values()]
+    .filter(e => !e.isGroup && e.username !== currentUsername && !existingSet.has(e.username))
+    .map(e => e.username)
+    .sort();
+
+  renderGroupChips();
+  renderGroupMemberList();
+  document.getElementById('create-group-modal').classList.add('open');
 }
+
 async function submitCreateGroup() {
+  if (groupModalMode === 'add') {
+    if (!selectedGroupMembers.size) { showToast('Select at least one friend', true); return; }
+    const res = await fetch(`${API}/add_to_group/${groupModalChatId}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ group_name: activeChat?.username || '', memebers: [...selectedGroupMembers] })
+    });
+    if (!res.ok) { showToast('Failed to add members', true); return; }
+    closeModal('create-group-modal');
+    showToast('Members added!');
+    return;
+  }
   const group_name = document.getElementById('grp-name-input').value.trim();
   if (!group_name) { showToast('Group name required', true); return; }
-  if (selectedGroupMembers.size < 1) { showToast('Pick at least one friend', true); return; }
   const res = await fetch(`${API}/create_group`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
     body: JSON.stringify({ group_name, memebers: [...selectedGroupMembers] })
@@ -2230,6 +2379,52 @@ async function submitCreateGroup() {
   closeModal('create-group-modal');
   showToast('Group created!');
 }
+
+function renderGroupMemberList() {
+  const list = document.getElementById('grp-member-list');
+  if (!availableGroupFriends.length) {
+    list.innerHTML = `<div class="empty-requests">No one available to add</div>`;
+    return;
+  }
+  list.innerHTML = availableGroupFriends.map(u => {
+    const isSel = selectedGroupMembers.has(u);
+    const [bg, fg] = avatarColors[getColorIdx(u)];
+    return `
+    <div class="grp-member-row${isSel ? ' selected' : ''}" onclick="toggleGroupMember('${u}')" tabindex="0" role="checkbox" aria-checked="${isSel}">
+      <div class="grp-member-avatar" style="background:${bg}20;color:${fg}">${initials(u)}</div>
+      <div class="grp-member-name">${escapeHtml(u)}</div>
+      <div class="grp-check">
+        <svg viewBox="0 0 12 10" fill="none"><path d="M1 5l3.5 3.5L11 1" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderGroupChips() {
+  const wrap = document.getElementById('grp-chips-wrap');
+  if (!selectedGroupMembers.size) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+  wrap.style.display = 'flex';
+  wrap.innerHTML = [...selectedGroupMembers].map(u => {
+    const [bg, fg] = avatarColors[getColorIdx(u)];
+    return `
+    <div class="grp-chip">
+      <div class="grp-chip-avatar" style="background:${bg}30;color:${fg}">${initials(u)}</div>
+      <span>${escapeHtml(u)}</span>
+      <button class="grp-chip-remove" onclick="event.stopPropagation();toggleGroupMember('${u}')" title="Remove">
+        <svg viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2L2 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function toggleGroupMember(username) {
+  if (selectedGroupMembers.has(username)) selectedGroupMembers.delete(username);
+  else selectedGroupMembers.add(username);
+  renderGroupChips();
+  renderGroupMemberList();
+}
+
+
 
 /* ── BADGE ── */
 function updateRequestBadge(count) {
