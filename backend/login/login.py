@@ -322,8 +322,8 @@ async def validate_session(request: Request):
     try:
         if await r.exists(f"blacklist:{token}"):
                 raise HTTPException(status_code=401,detail="invalid token")
-    except:
-        pass
+    except Exception as e:
+        print(e)
     return validate_token(token)
 
 
@@ -760,7 +760,7 @@ async def socket_manager(websocket: WebSocket):
                 sent_time=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
                 connection=await get_connection("chat_db")
                 cursor=await connection.cursor()
-                query1="SELECT a.user1,b.group_name FROM friends as a LEFT JOIN groups_metadata as b ON a.chat_id=b.chat_id WHERE chat_id=%s"
+                query1="SELECT a.user1,b.group_name FROM friends as a LEFT JOIN groups_metadata as b ON a.chat_id=b.chat_id WHERE a.chat_id=%s"
                 query2="INSERT INTO chats (chat_id,sender,content,sent_at,replied_to) VALUES(%s,%s,%s,%s,%s)"
                 query3="SELECT sender,content,sent_at FROM chats WHERE id=%s AND chat_id=%s"
                 query4="SELECT LAST_INSERT_ID()"
@@ -797,8 +797,8 @@ async def socket_manager(websocket: WebSocket):
                         }))
                     for user in member_list:
                         if user!=payload['username']:
+                            await r.delete(f"sidebar:{user}")
                             for soc in user_socket.get(user,[]):
-                                await r.delete(f"sidebar:{user}")
                                 await safe_send(soc,json.dumps({
                                     "type":"receive_message_grp",
                                     "content":data["content"],
@@ -842,26 +842,27 @@ async def load_sidebar(request:Request,id: int):
             if cached is not None:
                 return json.loads(cached)
         query = """
-                SELECT a.user2, a.chat_id, b.sender, b.content, b.sent_at, b.id as last_id,
-    (
-        SELECT COUNT(*) FROM chats c
-        WHERE c.chat_id = a.chat_id
-        AND c.id > COALESCE((
-            SELECT last_read_id FROM read_receipts
-            WHERE chat_id = a.chat_id AND username = %s
-        ), 0)
-        AND c.sender != %s
-    ) as unread_count,
-    g.group_name
+        SELECT a.user2, a.chat_id, b.sender, b.content, b.sent_at, b.id as last_id,
+(
+    SELECT COUNT(*) FROM chats c
+    WHERE c.chat_id = a.chat_id
+    AND c.id > COALESCE((
+        SELECT last_read_id FROM read_receipts
+        WHERE chat_id = a.chat_id AND username = %s
+    ), 0)
+    AND c.sender != %s
+) as unread_count,
+g.group_name,
+COALESCE(b.sent_at, a.friend_date) as activity_ts
 FROM friends a
 LEFT JOIN chats b ON b.id = (
     SELECT MAX(id) FROM chats WHERE chat_id = a.chat_id
 )
 LEFT JOIN groups_metadata g ON g.chat_id = a.chat_id
 WHERE a.user1 = %s AND (b.id < %s OR b.id IS NULL)
-ORDER BY b.id DESC
+ORDER BY activity_ts DESC
 LIMIT 50
-            """
+        """
         await cursor.execute(query,(payload["username"],payload["username"],payload["username"],id))
         result=await cursor.fetchall()
         if id==999999999:
@@ -1092,8 +1093,8 @@ async def upload_media(request:Request,chat_id:str,file:file_details):
                 content=data,
                 status_code=response.status_code
             )
-    except:
-        pass
+    except Exception as e:
+        print(e)
 
 class upload_id(BaseModel):
     uploadid:str
@@ -1145,6 +1146,7 @@ async def confirm_media(request:Request,chat_id:str,x:upload_id):
             res=await cursor.fetchone()
             await cursor.execute(query3,(chat_id,))
             mem=await cursor.fetchall()
+            await r.delete(f"sidebar:{payload['username']}")
 
             for soc in user_socket.get(payload["username"],[]):
                 await safe_send(soc,json.dumps({
@@ -1165,6 +1167,7 @@ async def confirm_media(request:Request,chat_id:str,x:upload_id):
                 }))
             for users in mem:
                 if users[0]!=payload['username']:
+                    await r.delete(f"sidebar:{users[0]}")
                     for soc in user_socket.get(users[0],[]):
                         await safe_send(soc,json.dumps({
                             "type":"receive_attachment",
@@ -1214,8 +1217,8 @@ async def friends_list(request:Request,user:str):
         res=await cursor.fetchall()
         return res
         
-    except:
-        pass
+    except Exception as e:
+        print(e)
     finally:
         await cursor.close()
         connection.close()
@@ -1231,6 +1234,7 @@ async def create_grp(request:Request,x:grp):
         payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
         query1="INSERT INTO friends (user1,friend_date,chat_id) VALUES(%s,%s,%s)"
         query2="INSERT INTO groups_metadata (chat_id,group_name,created_date,created_by) VALUES(%s,%s,%s,%s)"
+        query3="INSERT INTO read_receipts (last_read_id,chat_id,username) VALUES(%s,%s,%s)"
         created_date=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         chat_id=str(uuid.uuid4())
         await cursor.execute(query2,(chat_id,x.group_name,created_date,payload['username']))
@@ -1238,9 +1242,13 @@ async def create_grp(request:Request,x:grp):
         for users in x.memebers:
             if users!=payload['username']:
                 await cursor.execute(query1,(users,created_date,chat_id))
+                await cursor.execute(query3,(0,chat_id,users))
+        await cursor.execute(query3,(0,chat_id,payload['username']))
+
         await connection.commit()
         for users in x.memebers:
             if users!=payload['username']:
+                await r.delete(f"sidebar:{users}")
                 for soc in user_socket.get(users,[]):
                     await safe_send(soc,json.dumps({
                         "type":"added_to_grp",
@@ -1248,6 +1256,9 @@ async def create_grp(request:Request,x:grp):
                         "chat_id":chat_id
                         
                     }))
+        
+        await r.delete(f"sidebar:{payload['username']}")
+        
         for soc in user_socket.get(payload['username'],[]):
                 await safe_send(soc,json.dumps({
                     "type":"grp_created",
@@ -1258,8 +1269,76 @@ async def create_grp(request:Request,x:grp):
             "grp_creation":"success"
         }
 
-    except:
-        pass
+    except Exception as e:
+        print(e)
+    finally:
+        await cursor.close()
+        connection.close()
+
+
+@app.get("/grp_members/{chat_id}")
+async def grp_members(chat_id:str,request:Request):
+    token=request.cookies.get("token")
+    connection=await get_connection("chat_db")
+    cursor=await connection.cursor()
+    try:
+        if await r.exists(f"blacklist:{token}"):
+            return
+        payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+        await cursor.execute("SELECT user1 FROM friends WHERE chat_id=%s",(chat_id,))
+        res=await cursor.fetchall()
+        grp_mems=[mem[0] for mem in res]
+        return grp_mems
+    finally:
+        await cursor.close()
+        connection.close()
+
+@app.post("/add_to_group/{chat_id}")
+async def add_to_grp(request:Request,x:grp,chat_id:str):
+    token=request.cookies.get("token")
+    connection=await get_connection("chat_db")
+    cursor=await connection.cursor()
+    try:
+        if await r.exists(f"blacklist:{token}"):
+            return
+        payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+        query1="INSERT INTO friends (user1,friend_date,chat_id) VALUES(%s,%s,%s)"
+        query3="INSERT INTO read_receipts (last_read_id,chat_id,username) VALUES(%s,%s,%s)"
+        added_date=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    
+      
+        for users in x.memebers:
+            if users!=payload['username']:
+                await cursor.execute(query1,(users,added_date,chat_id))
+                await cursor.execute(query3,(0,chat_id,users))
+       
+
+        await connection.commit()
+        for users in x.memebers:
+            if users!=payload['username']:
+                await r.delete(f"sidebar:{users}")
+                for soc in user_socket.get(users,[]):
+                    await safe_send(soc,json.dumps({
+                        "type":"added_to_grp",
+                        "grp_name":x.group_name,
+                        "chat_id":chat_id
+                        
+                    }))
+        
+        await r.delete(f"sidebar:{payload['username']}")
+        
+        for soc in user_socket.get(payload['username'],[]):
+                await safe_send(soc,json.dumps({
+                    "type":"added_to_grp",
+                    "grp_name":x.group_name,
+                    "chat_id":chat_id
+                }))
+        return {
+            "grp_addition":"success"
+        }
+
+    except Exception as e:
+        print(e)
     finally:
         await cursor.close()
         connection.close()
