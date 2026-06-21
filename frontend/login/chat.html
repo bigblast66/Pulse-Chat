@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1004,7 +1003,12 @@ body::before {
 <!-- SIDEBAR -->
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-header">
-    <div class="sidebar-title">Messages</div>
+    <div class="sidebar-title" style="display:flex;align-items:center;justify-content:space-between;">
+      <span>Messages</span>
+      <button class="icon-btn" title="New group" onclick="openCreateGroup()" style="width:30px;height:30px;flex-shrink:0;">
+        <svg viewBox="0 0 20 20" fill="none"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+    </div>
     <div class="search-wrap">
       <svg viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
       <input class="search-input" type="text" id="sidebar-search-input" placeholder="Search conversations…" oninput="onSidebarSearch(this.value)">
@@ -1201,6 +1205,31 @@ body::before {
   </div>
 </div>
 
+<!-- CREATE GROUP MODAL -->
+<div class="overlay" id="create-group-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title">New Group</span>
+      <button class="close-btn" onclick="closeModal('create-group-modal')">
+        <svg viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="profile-fields" style="padding-bottom:0">
+      <div class="profile-field">
+        <label>Group name</label>
+        <input type="text" id="grp-name-input" placeholder="e.g. Weekend Trip">
+      </div>
+    </div>
+    <div class="sidebar-section-label">Add friends</div>
+    <div id="grp-member-list" style="padding:4px 20px 16px;max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:2px;"></div>
+    <div class="profile-actions">
+      <button class="btn-secondary" onclick="closeModal('create-group-modal')">Cancel</button>
+      <button class="btn-primary" id="grp-create-btn" onclick="submitCreateGroup()">Create</button>
+    </div>
+  </div>
+</div>
+
 <!-- LIGHTBOX -->
 <div class="lightbox" id="lightbox" onclick="if(event.target===this) closeLightbox()">
   <div class="lightbox-topbar">
@@ -1291,14 +1320,25 @@ function escapeHtml(str) {
 }
 
 /* ── TYPING ── */
+function typingKey(username, chat_id) { return `${chat_id}::${username}`; }
+function getTypingUserForChat(chat_id) {
+  const prefix = `${chat_id}::`;
+  for (const key of typingUsers.keys()) {
+    if (key.startsWith(prefix)) return key.slice(prefix.length);
+  }
+  return null;
+}
+function isAnyoneTypingInChat(chat_id) { return getTypingUserForChat(chat_id) !== null; }
 function setTyping(username, chat_id) {
-  if (typingUsers.has(username)) clearTimeout(typingUsers.get(username));
+  const key = typingKey(username, chat_id);
+  if (typingUsers.has(key)) clearTimeout(typingUsers.get(key));
   const timer = setTimeout(() => clearTyping(username, chat_id), 3500);
-  typingUsers.set(username, timer);
+  typingUsers.set(key, timer);
   updateTypingUI(username, chat_id, true);
 }
 function clearTyping(username, chat_id) {
-  if (typingUsers.has(username)) { clearTimeout(typingUsers.get(username)); typingUsers.delete(username); }
+  const key = typingKey(username, chat_id);
+  if (typingUsers.has(key)) { clearTimeout(typingUsers.get(key)); typingUsers.delete(key); }
   updateTypingUI(username, chat_id, false);
 }
 function updateTypingUI(username, chat_id, isTyping) {
@@ -1309,26 +1349,30 @@ function updateTypingUI(username, chat_id, isTyping) {
       if (isTyping) {
         el.className = 'contact-preview typing-preview';
         el.innerHTML = `<span class="typing-dots-sm"><span></span><span></span><span></span></span> typing…`;
-      } else {
+      } else if (!isAnyoneTypingInChat(chat_id)) {
         el.className = 'contact-preview';
-        const previewPrefix = entry.sender === currentUsername ? 'You: ' : '';
+        let previewPrefix = '';
+        if (entry.sender === currentUsername) previewPrefix = 'You: ';
+        else if (entry.isGroup && entry.sender) previewPrefix = `${entry.sender}: `;
         el.textContent = previewPrefix + (entry.content ? entry.content : '—');
       }
     }
   }
   if (activeChat && activeChat.chat_id === chat_id) {
     const statusEl = document.getElementById('chat-status');
-    if (isTyping) {
-      statusEl.className = 'chat-header-status typing-status';
-      statusEl.innerHTML = `<span class="typing-dots"><span></span><span></span><span></span></span> typing…`;
-    } else {
-      statusEl.className = 'chat-header-status';
-      statusEl.textContent = 'Online';
-    }
     const pill = document.getElementById('typing-pill');
     const nameEl = document.getElementById('typing-pill-name');
-    if (isTyping) { nameEl.textContent = username; pill.classList.add('visible'); }
-    else { pill.classList.remove('visible'); }
+    const stillTyping = getTypingUserForChat(chat_id);
+    if (isTyping || stillTyping) {
+      statusEl.className = 'chat-header-status typing-status';
+      statusEl.innerHTML = `<span class="typing-dots"><span></span><span></span><span></span></span> typing…`;
+      nameEl.textContent = isTyping ? username : stillTyping;
+      pill.classList.add('visible');
+    } else {
+      statusEl.className = 'chat-header-status';
+      statusEl.textContent = activeChat.isGroup ? 'Group' : 'Online';
+      pill.classList.remove('visible');
+    }
   }
 }
 
@@ -1430,9 +1474,11 @@ async function loadSidebar() {
     const rows = await res.json();
     if (!rows || !rows.length) { sidebarAllLoaded = true; return; }
     for (const row of rows) {
-      const [username, chat_id, sender, content, sent_at, last_id, unread_count] = row;
+      const [username, chat_id, sender, content, sent_at, last_id, unread_count, group_name] = row;
+      const isGroup = username === null;
+      const displayName = isGroup ? group_name : username;
       if (!sidebarMap.has(chat_id)) {
-        sidebarMap.set(chat_id, { username, chat_id, sender, content, sent_at, last_id: last_id ?? 0, unread_count: unread_count ?? 0, colorIdx: getColorIdx(username) });
+        sidebarMap.set(chat_id, { username: displayName, chat_id, sender, content, sent_at, last_id: last_id ?? 0, unread_count: unread_count ?? 0, colorIdx: getColorIdx(displayName), isGroup });
       }
     }
     const validIds = rows.map(r => r[5]).filter(id => id !== null);
@@ -1455,8 +1501,10 @@ function renderSidebar() {
   list.innerHTML = sorted.map(c => {
     const [bg, fg] = avatarColors[c.colorIdx];
     const isActive = activeChat && activeChat.chat_id === c.chat_id;
-    const isTypingNow = typingUsers.has(c.username);
-    const previewPrefix = c.sender === currentUsername ? 'You: ' : '';
+    const isTypingNow = isAnyoneTypingInChat(c.chat_id);
+    let previewPrefix = '';
+    if (c.sender === currentUsername) previewPrefix = 'You: ';
+    else if (c.isGroup && c.sender) previewPrefix = `${c.sender}: `;
     const preview = c.content ? escapeHtml(c.content) : '—';
     let previewHtml;
     if (isTypingNow) {
@@ -1478,13 +1526,13 @@ function renderSidebar() {
     </div>`;
   }).join('');
 }
-function upsertSidebarEntry(chat_id, username, sender, content, sent_at, msg_id, isIncoming) {
+function upsertSidebarEntry(chat_id, username, sender, content, sent_at, msg_id, isIncoming, isGroup = false) {
   if (sidebarMap.has(chat_id)) {
     const e = sidebarMap.get(chat_id);
     e.sender = sender; e.content = content; e.sent_at = sent_at; e.last_id = msg_id;
     if (isIncoming && !(activeChat && activeChat.chat_id === chat_id)) e.unread_count = (e.unread_count||0)+1;
   } else {
-    sidebarMap.set(chat_id, { username, chat_id, sender, content, sent_at, last_id: msg_id, unread_count: isIncoming ? 1 : 0, colorIdx: getColorIdx(username) });
+    sidebarMap.set(chat_id, { username, chat_id, sender, content, sent_at, last_id: msg_id, unread_count: isIncoming ? 1 : 0, colorIdx: getColorIdx(username), isGroup });
   }
   renderSidebar();
 }
@@ -1498,7 +1546,7 @@ async function openChat(chat_id) {
     return;
   }
   history.pushState({ chat_id }, '', `?c=${chat_id}`);
-  activeChat = { username: entry.username, chat_id, colorIdx: entry.colorIdx, messages: [], oldestId: 999999999, hasMore: true, hasNewer: false };
+  activeChat = { username: entry.username, chat_id, colorIdx: entry.colorIdx, messages: [], oldestId: 999999999, hasMore: true, hasNewer: false, isGroup: !!entry.isGroup };
   clearReply();
   entry.unread_count = 0;
   renderSidebar();
@@ -1517,12 +1565,14 @@ async function openChat(chat_id) {
   document.getElementById('chat-name').textContent = entry.username;
   const statusEl = document.getElementById('chat-status');
   statusEl.className = 'chat-header-status';
-  statusEl.textContent = 'Online';
+  statusEl.textContent = entry.isGroup ? 'Group' : 'Online';
 
   const pill = document.getElementById('typing-pill');
   const nameEl = document.getElementById('typing-pill-name');
   pill.classList.remove('visible');
-  if (typingUsers.has(entry.username)) { nameEl.textContent = entry.username; pill.classList.add('visible'); }
+  const initialTyper = getTypingUserForChat(chat_id);
+  if (initialTyper) { nameEl.textContent = initialTyper; pill.classList.add('visible'); }
+  if (initialTyper) statusEl.className = 'chat-header-status typing-status';
 
   const area = document.getElementById('messages-area');
   Array.from(area.children).forEach(child => { if (child !== pill) child.remove(); });
@@ -1700,7 +1750,9 @@ function sendMessage() {
   }
 
   if (!text || !activeChat || !ws || ws.readyState !== WebSocket.OPEN) return;
-  const payload = { type: 'send_message', chat_id: activeChat.chat_id, username: activeChat.username, content: text };
+  const payload = activeChat.isGroup
+    ? { type: 'send_message_grp', chat_id: activeChat.chat_id, content: text }
+    : { type: 'send_message', chat_id: activeChat.chat_id, username: activeChat.username, content: text };
   if (replyingTo) payload.replied_to = replyingTo.id;
   ws.send(JSON.stringify(payload));
   input.value = '';
@@ -1722,7 +1774,7 @@ function onMsgInput(e) {
   const now = Date.now();
   if (now - lastTypingPing < TYPING_THROTTLE) return;
   lastTypingPing = now;
-  ws.send(JSON.stringify({ type: 'typing', username: activeChat.username, chat_id: activeChat.chat_id }));
+  ws.send(JSON.stringify({ type: 'typing', chat_id: activeChat.chat_id }));
 }
 
 function sendReadReceipt(chat_id, msg_id) {
@@ -1746,6 +1798,18 @@ function connectWebSocket() {
       if (activeChat && activeChat.chat_id === msg.chat_id) { clearTyping(msg.sender, msg.chat_id); activeChat.messages.push(newMsg); renderMessages(true); sendReadReceipt(msg.chat_id, newMsg.id); }
       upsertSidebarEntry(msg.chat_id, msg.sender, msg.sender, msg.content, msg.sent_at, newMsg.id, true);
     }
+    if (msg.type === 'sent_message_grp') {
+      const newMsg = { id: msg.id||Date.now(), chat_id: msg.chat_id, sender: msg.sender, content: msg.content, sent_at: msg.sent_at, replied_to: msg.replied_to??null, replied_content: msg.replied_content??null };
+      if (activeChat && activeChat.chat_id === msg.chat_id) { activeChat.messages.push(newMsg); renderMessages(true); sendReadReceipt(msg.chat_id, newMsg.id); }
+      const entry = sidebarMap.get(msg.chat_id);
+      upsertSidebarEntry(msg.chat_id, entry ? entry.username : msg.grp_name, msg.sender, msg.content, msg.sent_at, newMsg.id, false, true);
+    }
+    if (msg.type === 'receive_message_grp') {
+      const newMsg = { id: msg.id||Date.now(), chat_id: msg.chat_id, sender: msg.sender, content: msg.content, sent_at: msg.sent_at, replied_to: msg.replied_to??null, replied_content: msg.replied_content??null };
+      if (activeChat && activeChat.chat_id === msg.chat_id) { clearTyping(msg.sender, msg.chat_id); activeChat.messages.push(newMsg); renderMessages(true); sendReadReceipt(msg.chat_id, newMsg.id); }
+      const entry = sidebarMap.get(msg.chat_id);
+      upsertSidebarEntry(msg.chat_id, entry ? entry.username : msg.grp_name, msg.sender, msg.content, msg.sent_at, newMsg.id, true, true);
+    }
     if (msg.type === 'updated_read_receipt') {
       if (sidebarMap.has(msg.chat_id)) { sidebarMap.get(msg.chat_id).unread_count = 0; renderSidebar(); }
     }
@@ -1768,7 +1832,17 @@ function connectWebSocket() {
       if (msg.status === 'accepted') {
         showToast(`${msg.username} accepted your request!`);
         if (modalOpen && activeReqTab==='outgoing') switchReqTab('outgoing');
-        sidebarAllLoaded = false; sidebarOldestId = 999999999; sidebarMap.clear(); loadSidebar();
+        if (!sidebarMap.has(msg.chat_id)) {
+          sidebarMap.set(msg.chat_id, {
+            username: msg.username,
+            chat_id: msg.chat_id,
+            sender: null, content: null, sent_at: null,
+            last_id: 0, unread_count: 0,
+            colorIdx: getColorIdx(msg.username),
+            isGroup: false
+          });
+        }
+        renderSidebar();
       } else if (msg.status === 'rejected') {
         showToast(`${msg.username} declined your request`, true);
         if (modalOpen && activeReqTab==='outgoing') switchReqTab('outgoing');
@@ -1783,6 +1857,7 @@ function connectWebSocket() {
         original_name: msg.original_name || 'File', size_bytes: msg.size_bytes || 0
       };
       const isIncoming = msg.type === 'receive_attachment';
+      const isGroup = !!msg.grp_name;
       if (activeChat && activeChat.chat_id === msg.chat_id) {
         if (isIncoming) clearTyping(msg.sender, msg.chat_id);
         activeChat.messages.push(newMsg);
@@ -1790,7 +1865,9 @@ function connectWebSocket() {
         sendReadReceipt(msg.chat_id, newMsg.id);
       }
       const entry = sidebarMap.get(msg.chat_id);
-      upsertSidebarEntry(msg.chat_id, isIncoming ? msg.sender : (entry?.username ?? activeChat?.username), msg.sender, '📎 Attachment', msg.sent_at, newMsg.id, isIncoming);
+      const displayName = isGroup ? msg.grp_name : (isIncoming ? msg.sender : (entry?.username ?? activeChat?.username));
+      const previewText = isGroup ? `${msg.sender}: 📎 Attachment` : '📎 Attachment';
+      upsertSidebarEntry(msg.chat_id, entry ? entry.username : displayName, msg.sender, previewText, msg.sent_at, newMsg.id, isIncoming, isGroup);
     }
     if (msg.type === 'request_takeback') {
       if (!msg.req_detail) return;
@@ -1799,6 +1876,20 @@ function connectWebSocket() {
       if (username !== currentUsername) { requestCount = Math.max(0, requestCount-1); updateRequestBadge(requestCount); }
       if (!document.querySelectorAll('#requests-list .request-item').length)
         document.getElementById('requests-list').innerHTML = `<div class="empty-requests">No ${activeReqTab} requests</div>`;
+    }
+    if (msg.type === 'grp_created' || msg.type === 'added_to_grp') {
+      if (!sidebarMap.has(msg.chat_id)) {
+        sidebarMap.set(msg.chat_id, {
+          username: msg.grp_name,
+          chat_id: msg.chat_id,
+          sender: null, content: null, sent_at: null,
+          last_id: 0, unread_count: 0,
+          colorIdx: getColorIdx(msg.grp_name),
+          isGroup: true
+        });
+        renderSidebar();
+        if (msg.type === 'added_to_grp') showToast(`Added to "${msg.grp_name}"`);
+      }
     }
   };
   ws.onclose = () => setTimeout(() => connectWebSocket(), 3000);
@@ -2103,6 +2194,41 @@ function showReqFeedback(msg, ok) {
   fb.textContent = msg; fb.style.display = 'block'; fb.style.color = ok ? 'var(--success)' : 'var(--danger)';
   input.style.borderColor = ok ? 'rgba(76,175,138,0.5)' : 'rgba(224,92,92,0.5)';
   setTimeout(() => { fb.style.display = 'none'; input.style.borderColor = ''; if (ok) input.value = ''; }, 3000);
+}
+
+/* ── CREATE GROUP ── */
+let selectedGroupMembers = new Set();
+function openCreateGroup() {
+  selectedGroupMembers.clear();
+  document.getElementById('grp-name-input').value = '';
+  const list = document.getElementById('grp-member-list');
+  const friends = [...sidebarMap.values()].filter(e => !e.isGroup).map(e => e.username).sort();
+
+  if (!friends.length) {
+    list.innerHTML = `<div class="empty-requests">No friends yet</div>`;
+  } else {
+    list.innerHTML = friends.map(u => `
+      <label style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;cursor:pointer;">
+        <input type="checkbox" value="${escapeHtml(u)}" onchange="toggleGroupMember(this)">
+        <span style="font-size:13.5px;color:var(--text)">${escapeHtml(u)}</span>
+      </label>`).join('');
+  }
+  document.getElementById('create-group-modal').classList.add('open');
+}
+function toggleGroupMember(cb) {
+  cb.checked ? selectedGroupMembers.add(cb.value) : selectedGroupMembers.delete(cb.value);
+}
+async function submitCreateGroup() {
+  const group_name = document.getElementById('grp-name-input').value.trim();
+  if (!group_name) { showToast('Group name required', true); return; }
+  if (selectedGroupMembers.size < 1) { showToast('Pick at least one friend', true); return; }
+  const res = await fetch(`${API}/create_group`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+    body: JSON.stringify({ group_name, memebers: [...selectedGroupMembers] })
+  });
+  if (!res.ok) { showToast('Failed to create group', true); return; }
+  closeModal('create-group-modal');
+  showToast('Group created!');
 }
 
 /* ── BADGE ── */
