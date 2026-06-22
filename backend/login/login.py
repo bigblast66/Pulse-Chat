@@ -857,10 +857,12 @@ async def socket_manager(websocket: WebSocket):
                     pool.release(connection)
             elif data["type"]=='leave_grp':
                 query="DELETE FROM friends WHERE user1=%s AND chat_id=%s"
+                query1="DELETE FROM read_receipts WHERE username=%s AND chat_id=%s"
                 conn=await pool.acquire()
                 cursor=await conn.cursor()
                 try:
                     await cursor.execute(query,(payload['username'],data['chat_id']))
+                    await cursor.execute(query1,(payload['username'],data['chat_id']))
                     await conn.commit()
                 except Exception as e:
                     print(e)
@@ -1084,6 +1086,12 @@ def is_valid_filename(filename: str):
 
 
 
+timeout = httpx.Timeout(
+    connect=10.0,
+    read=60.0,
+    write=10.0,
+    pool=10.0
+)
 
 @app.post("/upload_media/{chat_id}")
 async def upload_media(request:Request,chat_id:str,file:file_details):
@@ -1170,7 +1178,7 @@ async def confirm_media(request:Request,chat_id:str,x:upload_id):
         if await r.exists(f"blacklist:{token}"):
             return
         payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=timeout) as client:
             response=await client.post("https://putput.io/api/v1/upload/confirm",headers={
                                                         "Authorization":f"Bearer {S3_TOKEN}",
                                                     "Content-Type":"application/json"
