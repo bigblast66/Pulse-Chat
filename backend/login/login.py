@@ -31,29 +31,59 @@ ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "").split(",")
 cert_content= os.getenv("DB_CERT")
 DB_PORT= int(os.getenv("DB_PORT"))
 
-# r=redis.Redis(host=REDIS_HOST,port=REDIS_PORT,decode_responses=True)
-r=redis.from_url(os.getenv("REDIS_URL"),decode_responses=True)
-async def get_connection(db_name):
-    """
-     connects to database and return the connection (MYSQL)
-    """
-    # return await aiomysql.connect(
-    #     host=DB_HOST,
-    #     user=DB_USER,
-    #     password=DB_PASSWORD,
-    #     db=db_name
-    # )
+
+
+
+app=FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGIN,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
+
+
+pool=None
+@app.on_event("startup")
+async def startup():
     ssl_context = ssl.create_default_context()
     ssl_context.load_verify_locations(cadata=cert_content)
-
-    return await aiomysql.connect(
+    global pool
+    pool=await aiomysql.create_pool(
         host=DB_HOST,
         user=DB_USER,
         password=DB_PASSWORD,
         port=DB_PORT,
-        db=db_name,
-        ssl=ssl_context
+        db=DB_NAME,
+        ssl=ssl_context,
+        minsize=2,
+        maxsize=10
     )
+    # pool=await aiomysql.create_pool(
+    #     host=DB_HOST,
+    #     user=DB_USER,
+    #     password=DB_PASSWORD,
+    #     db=DB_NAME,
+    #     minsize=2,
+    #     maxsize=10
+    # )
+
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    pool.close()
+    await pool.wait_closed()
+
+
+
+
+
+# r=redis.Redis(host=REDIS_HOST,port=REDIS_PORT,decode_responses=True)
+r=redis.from_url(os.getenv("REDIS_URL"),decode_responses=True)
+
 
 
 
@@ -124,14 +154,7 @@ def generate_token(email,username):
     return token
 
 
-app=FastAPI()
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGIN,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
-)
+
 
 #login format
 class user_input(BaseModel):
@@ -167,7 +190,7 @@ async def signup(x:user_input_signup):
         creation_time=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
-        connection=await get_connection(DB_NAME)
+        connection=await pool.acquire()
         cursor=await connection.cursor()
 
 
@@ -229,7 +252,7 @@ async def signup(x:user_input_signup):
             
         finally:
             await cursor.close()
-            connection.close()
+            pool.release(connection)
     else:
         errors={
             "process":"signup",
@@ -259,7 +282,7 @@ async def login(x:user_input):
     email=x.email.strip()
     query="SELECT password,username FROM user_metadata WHERE email=%s"
 
-    connection=await get_connection(DB_NAME)
+    connection=await pool.acquire()
     cursor=await connection.cursor()
     try:
         await cursor.execute(query,(email,))
@@ -294,7 +317,7 @@ async def login(x:user_input):
         }
     finally:
         await cursor.close()
-        connection.close()
+        pool.release(connection)
 
 
 
@@ -331,7 +354,7 @@ async def validate_session(request: Request):
 @app.get("/me")
 async def user_profile(request: Request):
     token=request.cookies.get("token")
-    connection=await get_connection(DB_NAME)
+    connection=await pool.acquire()
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -354,14 +377,14 @@ async def user_profile(request: Request):
         return data
     finally:
         await cursor.close()
-        connection.close()
+        pool.release(connection)
 class about_input(BaseModel):
     about:str
 
 @app.patch("/update_about")
 async def update_about(about:about_input,request:Request):
     token=request.cookies.get("token")
-    connection=await get_connection(DB_NAME)
+    connection=await pool.acquire()
     cursor=await connection.cursor()
     query="UPDATE user_metadata SET about_me=%s WHERE email=%s"
     try:
@@ -374,7 +397,7 @@ async def update_about(about:about_input,request:Request):
         await connection.commit()
     finally:
         await cursor.close()
-        connection.close()
+        pool.release(connection)
 
 
 @app.get("/logout")
@@ -408,7 +431,7 @@ async def logout(request:Request,response: Response):
 async def requests_count(request:Request):
     token=request.cookies.get("token")
     query="SELECT COUNT(*) FROM requests WHERE receiver=%s"
-    connection=await get_connection(DB_NAME)
+    connection=await pool.acquire()
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -427,13 +450,13 @@ async def requests_count(request:Request):
         return data
     finally:
         await cursor.close()
-        connection.close()
+        pool.release(connection)
 
 @app.get("/requests_list")
 async def requests_list(request:Request):
     token=request.cookies.get("token")
     query=("SELECT id,sender,req_time FROM requests WHERE receiver=%s")
-    connection=await get_connection(DB_NAME)
+    connection=await pool.acquire()
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -444,7 +467,7 @@ async def requests_list(request:Request):
         return req_list
     finally:
         await cursor.close()
-        connection.close()
+        pool.release(connection)
 
 
 
@@ -452,7 +475,7 @@ async def requests_list(request:Request):
 async def requests_list(request:Request):
     token=request.cookies.get("token")
     query=("SELECT id,receiver,req_time FROM requests WHERE sender=%s")
-    connection=await get_connection(DB_NAME)
+    connection=await pool.acquire()
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -463,7 +486,7 @@ async def requests_list(request:Request):
         return req_list
     finally:
         await cursor.close()
-        connection.close()
+        pool.release(connection)
 
 user_socket={}
 socket_user={}
@@ -517,7 +540,7 @@ async def socket_manager(websocket: WebSocket):
             data=json.loads(data)
             if data["type"]=="request":
                 query1="DELETE FROM requests WHERE id=%s"
-                connection=await get_connection(DB_NAME)
+                connection=await pool.acquire()
                 cursor=await connection.cursor()
                 try:
                     await cursor.execute(query1,(data["id"],))
@@ -570,14 +593,14 @@ async def socket_manager(websocket: WebSocket):
                 finally:
                     await connection.commit()
                     await cursor.close()
-                    connection.close()
+                    pool.release(connection)
             elif data["type"]=="request_send":
                 query1="SELECT username FROM user_metadata WHERE username=%s"
                 query2="SELECT user1 FROM friends WHERE user1=%s AND user2=%s"
                 query3="SELECT sender,receiver FROM requests WHERE sender=%s AND receiver=%s"
                 if data["username"]==payload["username"]:
                     continue
-                connection=await get_connection(DB_NAME)
+                connection=await pool.acquire()
                 cursor=await connection.cursor()
                 try:
                     await cursor.execute(query3,(payload["username"],data["username"]))
@@ -635,10 +658,10 @@ async def socket_manager(websocket: WebSocket):
                         }))
                 finally:
                     await cursor.close()
-                    connection.close()
+                    pool.release(connection)
             elif data["type"]=="request_takeback":
                 query1="DELETE FROM requests WHERE id=%s"
-                connection=await get_connection(DB_NAME)
+                connection=await pool.acquire()
                 cursor=await connection.cursor()
                 try:
                     await cursor.execute(query1,(data["id"],))
@@ -657,14 +680,14 @@ async def socket_manager(websocket: WebSocket):
                         }))
                 finally:
                     await cursor.close()
-                    connection.close()
+                    pool.release(connection)
             elif data["type"]=="send_message":
                 query1="INSERT INTO chats (chat_id,sender,content,sent_at,replied_to) VALUES(%s,%s,%s,%s,%s)"
                 query2="SELECT user1 FROM friends WHERE chat_id=%s"
                 query3="SELECT sender,content,sent_at FROM chats WHERE id=%s AND chat_id=%s"
 
                 sent_time=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-                connection=await get_connection(DB_NAME)
+                connection=await pool.acquire()
                 cursor=await connection.cursor()
                 try:
                     await cursor.execute(query2,(data["chat_id"],))
@@ -714,9 +737,9 @@ async def socket_manager(websocket: WebSocket):
                 finally:
                     await connection.commit()
                     await cursor.close()
-                    connection.close()
+                    pool.release(connection)
             elif data["type"]=="update_read_receipt":
-                connection=await get_connection(DB_NAME)
+                connection=await pool.acquire()
                 cursor=await connection.cursor()
                 try:
                     
@@ -733,11 +756,11 @@ async def socket_manager(websocket: WebSocket):
                 finally:
                     await connection.commit()
                     await cursor.close()
-                    connection.close()
+                    pool.release(connection)
             elif data["type"]=="typing":
                 if await r.exists(f"typing:{payload['username']}:{data['chat_id']}"):
                     continue
-                conn=await get_connection(DB_NAME)
+                conn=await pool.acquire()
                 cursor=await conn.cursor()
                 try:
                     await r.setex(f"typing:{payload['username']}:{data['chat_id']}",3,1)
@@ -755,10 +778,10 @@ async def socket_manager(websocket: WebSocket):
                                 }))
                 finally:
                     await cursor.close()
-                    conn.close()
+                    pool.release(conn)
             elif data["type"]=="send_message_grp":
                 sent_time=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-                connection=await get_connection(DB_NAME)
+                connection=await pool.acquire()
                 cursor=await connection.cursor()
                 query1="SELECT a.user1,b.group_name FROM friends as a LEFT JOIN groups_metadata as b ON a.chat_id=b.chat_id WHERE a.chat_id=%s"
                 query2="INSERT INTO chats (chat_id,sender,content,sent_at,replied_to) VALUES(%s,%s,%s,%s,%s)"
@@ -813,7 +836,19 @@ async def socket_manager(websocket: WebSocket):
                 finally:
                     await connection.commit()
                     await cursor.close()
-                    connection.close()
+                    pool.release(connection)
+            elif data["type"]=='leave_grp':
+                query="DELETE FROM friends WHERE user1=%s AND chat_id=%s"
+                conn=await pool.acquire()
+                cursor=await conn.cursor()
+                try:
+                    await cursor.execute(query,(payload['username'],data['chat_id']))
+                    await conn.commit()
+                except Exception as e:
+                    print(e)
+                finally:
+                    await cursor.close()
+                    pool.release(conn)
 
 
     except WebSocketDisconnect:
@@ -831,7 +866,7 @@ async def socket_manager(websocket: WebSocket):
 @app.get("/load_sidebar/{id}")
 async def load_sidebar(request:Request,id: int):
     token=request.cookies.get("token")
-    connection=await get_connection(DB_NAME)
+    connection=await pool.acquire()
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -872,12 +907,12 @@ LIMIT 50
     
     finally:
         await cursor.close()
-        connection.close()
+        pool.release(connection)
 
 @app.get("/load_chat/{id}/{chat_id}")
 async def load_sidebar(request:Request,id: int,chat_id:str):
     token=request.cookies.get("token")
-    connection=await get_connection(DB_NAME)
+    connection=await pool.acquire()
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -902,12 +937,12 @@ async def load_sidebar(request:Request,id: int,chat_id:str):
     
     finally:
         await cursor.close()
-        connection.close()
+        pool.release(connection)
 
 @app.get("/load_chat_after/{id}/{chat_id}")
 async def load_chat_after(request:Request, id: int, chat_id: str):
     token=request.cookies.get("token")
-    connection=await get_connection(DB_NAME)
+    connection=await pool.acquire()
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -932,11 +967,11 @@ async def load_chat_after(request:Request, id: int, chat_id: str):
     
     finally:
         await cursor.close()
-        connection.close()
+        pool.release(connection)
 
 # @app.patch("/update_read_receipt/{token}/{id}/{chat_id}")
 # async def update_read_receipt(token:str,chat_id:str,id:int):
-#     connection=await get_connection(DB_NAME)
+#     connection=await pool.acquire()
 #     cursor=await connection.cursor()
 #     try:
 #         if await r.exists(f"blacklist:{token}"):
@@ -949,12 +984,12 @@ async def load_chat_after(request:Request, id: int, chat_id: str):
 #     finally:
 #         await connection.commit()
 #         await cursor.close()
-#         connection.close()
+#         pool.release(connection)
 
 @app.get("/search_sidebar/{input}")
 async def search_sidebar(request:Request,input:str):
     token=request.cookies.get("token")
-    connection=await get_connection(DB_NAME)
+    connection=await pool.acquire()
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -967,12 +1002,12 @@ async def search_sidebar(request:Request,input:str):
         return results
     finally:
         await cursor.close()
-        connection.close()
+        pool.release(connection)
 
 @app.get("/search_chat/{chat_id}/{input}/{id}")
 async def search_chat(request:Request,chat_id:str,input:str,id:int):
     token=request.cookies.get("token")
-    connection=await get_connection(DB_NAME)
+    connection=await pool.acquire()
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -985,7 +1020,7 @@ async def search_chat(request:Request,chat_id:str,input:str,id:int):
         return results
     finally:
         await cursor.close()
-        connection.close()
+        pool.release(connection)
 
 
 S3_TOKEN=os.getenv("S3_TOKEN")
@@ -1105,6 +1140,8 @@ class upload_id(BaseModel):
 @app.post("/confirm_media/{chat_id}")
 async def confirm_media(request:Request,chat_id:str,x:upload_id):
     token=request.cookies.get("token")
+    connection=None
+    cursor=None
     try:
         if await r.exists(f"blacklist:{token}"):
             return
@@ -1135,7 +1172,7 @@ async def confirm_media(request:Request,chat_id:str,x:upload_id):
         else:
             data=data["file"]
 
-            connection=await get_connection(DB_NAME)
+            connection=await pool.acquire()
             cursor=await connection.cursor()
             
             await cursor.execute(query,(x.uploadid,data["id"],data["public_url"],data["original_name"],data["content_type"],data["size_bytes"]))
@@ -1195,7 +1232,7 @@ async def confirm_media(request:Request,chat_id:str,x:upload_id):
         if cursor:
             await cursor.close()
         if connection:
-            connection.close()
+            pool.release(connection)
 
 
 class grp(BaseModel):
@@ -1206,7 +1243,7 @@ class grp(BaseModel):
 @app.get("/friends_list/{user}")
 async def friends_list(request:Request,user:str):
     token=request.cookies.get("token")
-    connection=await get_connection(DB_NAME)
+    connection=await pool.acquire()
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -1221,12 +1258,12 @@ async def friends_list(request:Request,user:str):
         print(e)
     finally:
         await cursor.close()
-        connection.close()
+        pool.release(connection)
 
 @app.post("/create_group")
 async def create_grp(request:Request,x:grp):
     token=request.cookies.get("token")
-    connection=await get_connection(DB_NAME)
+    connection=await pool.acquire()
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -1273,13 +1310,13 @@ async def create_grp(request:Request,x:grp):
         print(e)
     finally:
         await cursor.close()
-        connection.close()
+        pool.release(connection)
 
 
 @app.get("/grp_members/{chat_id}")
 async def grp_members(chat_id:str,request:Request):
     token=request.cookies.get("token")
-    connection=await get_connection(DB_NAME)
+    connection=await pool.acquire()
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
@@ -1291,26 +1328,29 @@ async def grp_members(chat_id:str,request:Request):
         return grp_mems
     finally:
         await cursor.close()
-        connection.close()
+        pool.release(connection)
 
 @app.post("/add_to_group/{chat_id}")
 async def add_to_grp(request:Request,x:grp,chat_id:str):
     token=request.cookies.get("token")
-    connection=await get_connection(DB_NAME)
+    connection=await pool.acquire()
     cursor=await connection.cursor()
     try:
         if await r.exists(f"blacklist:{token}"):
             return
         payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
         query1="INSERT INTO friends (user1,friend_date,chat_id) VALUES(%s,%s,%s)"
+        query2="SELECT MAX(id) FROM chats WHERE chat_id=%s"
         query3="INSERT INTO read_receipts (last_read_id,chat_id,username) VALUES(%s,%s,%s)"
         added_date=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     
-      
+        await cursor.execute(query2,(chat_id,))
+        read_receipt_id=await cursor.fetchone()
+        read_receipt_id=read_receipt_id[0]
         for users in x.memebers:
             if users!=payload['username']:
                 await cursor.execute(query1,(users,added_date,chat_id))
-                await cursor.execute(query3,(0,chat_id,users))
+                await cursor.execute(query3,(read_receipt_id,chat_id,users))
        
 
         await connection.commit()
@@ -1341,4 +1381,4 @@ async def add_to_grp(request:Request,x:grp,chat_id:str):
         print(e)
     finally:
         await cursor.close()
-        connection.close()
+        pool.release(connection)
