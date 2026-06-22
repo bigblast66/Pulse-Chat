@@ -1105,6 +1105,9 @@ body::before {
         <button class="icon-btn" id="add-members-btn" title="Add members" onclick="openAddMembers()" style="display:none;">
   <svg viewBox="0 0 18 18" fill="none"><circle cx="7" cy="6.5" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M1.5 16c0-3 2.5-5.5 5.5-5.5M13 4v6M10 7h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
 </button>
+<button class="icon-btn" id="leave-grp-btn" title="Leave group" onclick="leaveGroup()" style="display:none;">
+  <svg viewBox="0 0 18 18" fill="none"><path d="M7 3H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3M11 12l4-3-4-3M15 9H7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+</button>
         <button class="icon-btn" title="More options">
           <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="4" r="1" fill="currentColor"/><circle cx="8" cy="8" r="1" fill="currentColor"/><circle cx="8" cy="12" r="1" fill="currentColor"/></svg>
         </button>
@@ -1668,6 +1671,7 @@ async function openChat(chat_id) {
   statusEl.className = 'chat-header-status';
   statusEl.textContent = entry.isGroup ? 'Group' : '';
   document.getElementById('add-members-btn').style.display = entry.isGroup ? 'flex' : 'none';
+  document.getElementById('leave-grp-btn').style.display = entry.isGroup ? 'flex' : 'none';
 
   const pill = document.getElementById('typing-pill');
   // const nameEl = document.getElementById('typing-pill-name');
@@ -1710,6 +1714,31 @@ function showChatMobile() {
     document.body.classList.add('in-chat');
   }
 }
+
+
+
+function leaveGroup() {
+  if (!activeChat || !activeChat.isGroup) return;
+  if (!confirm(`Leave "${activeChat.username}"?`)) return;
+  ws.send(JSON.stringify({ type: 'leave_grp', chat_id: activeChat.chat_id }));
+  sidebarMap.delete(activeChat.chat_id);
+  activeChat = null;
+  clearReply();
+  document.getElementById('chat-area').classList.remove('visible');
+  document.getElementById('chat-area').style.display = 'none';
+  document.getElementById('empty-state').style.display = '';
+  document.getElementById('leave-grp-btn').style.display = 'none';
+  document.getElementById('add-members-btn').style.display = 'none';
+  renderSidebar();
+  if (window.innerWidth <= 768) {
+    document.getElementById('sidebar').classList.remove('hidden');
+    document.getElementById('main').classList.remove('visible');
+    document.body.classList.remove('in-chat');
+  }
+  history.pushState({}, '', window.location.pathname);
+  showToast('Left group');
+}
+
 
 /* ── LOAD MESSAGES ── */
 async function loadMoreMessages(scrollToBottom = false) {
@@ -2004,6 +2033,26 @@ function connectWebSocket() {
         if (msg.type === 'added_to_grp') showToast(`Added to "${msg.grp_name}"`);
       }
     }
+    if (msg.type === 'grp_left') {
+  sidebarMap.delete(msg.chat_id);
+  if (activeChat && activeChat.chat_id === msg.chat_id) {
+      activeChat = null;
+      clearReply();
+      document.getElementById('chat-area').classList.remove('visible');
+      document.getElementById('chat-area').style.display = 'none';
+      document.getElementById('empty-state').style.display = '';
+      document.getElementById('leave-grp-btn').style.display = 'none';
+      document.getElementById('add-members-btn').style.display = 'none';
+      if (window.innerWidth <= 768) {
+        document.getElementById('sidebar').classList.remove('hidden');
+        document.getElementById('main').classList.remove('visible');
+        document.body.classList.remove('in-chat');
+      }
+      history.pushState({}, '', window.location.pathname);
+    }
+    renderSidebar();
+    showToast('Left group');
+  }
   };
   ws.onclose = () => setTimeout(() => connectWebSocket(), 3000);
 }

@@ -864,6 +864,11 @@ async def socket_manager(websocket: WebSocket):
                     await cursor.execute(query,(payload['username'],data['chat_id']))
                     await cursor.execute(query1,(payload['username'],data['chat_id']))
                     await conn.commit()
+                    for soc in user_socket.get(payload['username'],[]):
+                        await safe_send(soc,json.dumps({
+                            "type":"grp_left",
+                            "chat_id":data['chat_id']
+                        }))
                 except Exception as e:
                     print(e)
                 finally:
