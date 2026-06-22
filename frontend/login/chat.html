@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <title>Pulse</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -39,7 +39,7 @@
   --glass-blur: blur(16px);
 }
 
-html, body { height: 100%; overflow: hidden; }
+html, body { height: 100%; height: 100dvh; overflow: hidden; overflow-x: clip; }
 
 body {
   font-family: 'DM Sans', sans-serif;
@@ -67,7 +67,7 @@ body::before {
 ═══════════════════════════════════════════════ */
 .nav-rail {
   width: var(--nav-w);
-  height: 100vh;
+  height: 100dvh;
   background: rgba(13,14,20,0.9);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
@@ -141,7 +141,7 @@ body::before {
 ═══════════════════════════════════════════════ */
 .sidebar {
   width: var(--sidebar-w);
-  height: 100vh;
+  height: 100dvh;
   background: rgba(13,14,20,0.75);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
@@ -245,7 +245,7 @@ body::before {
 ═══════════════════════════════════════════════ */
 .main {
   flex: 1; display: flex; flex-direction: column;
-  height: 100vh; overflow: hidden;
+  height: 100dvh; overflow: hidden;
   position: relative; z-index: 1;
 }
 
@@ -285,13 +285,13 @@ body::before {
 }
 .chat-header-info { flex: 1; min-width: 0; }
 .chat-header-name { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.chat-header-status { font-size: 11.5px; color: var(--text-dim); margin-top: 1px; }
-
-.typing-status { color: var(--accent) !important; display: flex; align-items: center; gap: 5px; }
+.chat-header-status { font-size: 11.5px; color: var(--text-dim); margin-top: 1px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.typing-status { color: var(--accent) !important; display: flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; }
 .typing-dots { display: inline-flex; gap: 3px; align-items: center; }
 .typing-dots span { width: 4px; height: 4px; background: var(--accent); border-radius: 50%; animation: typingBounce 1.2s infinite; }
 .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
 .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+.typing-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1 1 auto; }
 
 .chat-header-actions { display: flex; gap: 2px; flex-shrink: 0; }
 
@@ -306,7 +306,7 @@ body::before {
 .icon-btn:active { transform: scale(0.92); }
 
 .messages-area {
-  flex: 1; overflow-y: auto;
+  flex: 1; overflow-y: auto;overflow-x: hidden;
   padding: 18px 16px 10px;
   display: flex; flex-direction: column; gap: 4px;
   position: relative;
@@ -820,7 +820,9 @@ body::before {
   opacity: 0; pointer-events: none; transition: opacity 0.2s ease, transform 0.2s ease;
   z-index: 300; display: flex; align-items: center; gap: 8px;
   white-space: nowrap;
+  max-width: calc(100vw - 32px);
 }
+#toast-msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .toast-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
 .toast.danger .toast-dot { background: var(--danger); }
@@ -913,12 +915,13 @@ body::before {
   .sidebar { display: flex; width: var(--sidebar-w); position: static; }
   .main { display: flex; position: static; }
   .bottom-nav { display: none !important; }
-  .back-btn { display: flex !important; }
+ 
   .toast { bottom: 24px; }
 }
 
 @media (max-width: 768px) {
   .nav-rail { display: none; }
+   .back-btn { display: flex !important; }
   .bottom-nav { display: flex; }
   .main.visible ~ .bottom-nav,
   body.in-chat .bottom-nav { display: none !important; }
@@ -1092,7 +1095,7 @@ body::before {
         <div class="chat-header-avatar" id="chat-avatar"></div>
         <div class="chat-header-info">
           <div class="chat-header-name" id="chat-name"></div>
-          <div class="chat-header-status" id="chat-status">Online</div>
+          <div class="chat-header-status" id="chat-status"></div>
         </div>
       </div>
       <div class="chat-header-actions">
@@ -1427,14 +1430,14 @@ function updateTypingUI(username, chat_id, isTyping) {
     const typers = getTypingUsersForChat(chat_id);
     if (typers.length) {
       statusEl.className = 'chat-header-status typing-status';
-      statusEl.innerHTML = `<span class="typing-dots"><span></span><span></span><span></span></span> ${formatTypers(typers)} typing…`;
+      statusEl.innerHTML = `<span class="typing-dots"><span></span><span></span><span></span></span><span class="typing-text">${formatTypers(typers)} typing…</span>`;
     
       pill.classList.add('visible');
       // update pill text directly
       pill.innerHTML = `<span class="typing-dots"><span></span><span></span><span></span></span> ${formatTypers(typers)} typing`;
     } else {
       statusEl.className = 'chat-header-status';
-      statusEl.textContent = activeChat.isGroup ? 'Group' : 'Online';
+      statusEl.textContent = activeChat.isGroup ? 'Group' : '';
       pill.classList.remove('visible');
     }
   }
@@ -1663,7 +1666,7 @@ async function openChat(chat_id) {
   document.getElementById('chat-name').textContent = entry.username;
   const statusEl = document.getElementById('chat-status');
   statusEl.className = 'chat-header-status';
-  statusEl.textContent = entry.isGroup ? 'Group' : 'Online';
+  statusEl.textContent = entry.isGroup ? 'Group' : '';
   document.getElementById('add-members-btn').style.display = entry.isGroup ? 'flex' : 'none';
 
   const pill = document.getElementById('typing-pill');
@@ -1697,7 +1700,7 @@ async function openChat(chat_id) {
 
   await loadMoreMessages(true);
   if (activeChat.messages.length) sendReadReceipt(chat_id, activeChat.messages[activeChat.messages.length-1].id);
-  document.getElementById('msg-input').focus();
+ 
 }
 
 function showChatMobile() {
@@ -1795,8 +1798,8 @@ html += `
     <button class="reply-btn" onclick="setReplyById(${m.id},'${safeSender}','${safeContent}','${replyAttUrl}','${replyOrigName}')" title="Reply">
       <svg viewBox="0 0 16 16" fill="none"><path d="M6 4L2 8l4 4M2 8h7a4 4 0 0 1 4 4v1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
-    ${!isMine && activeChat.isGroup ? `<div class="msg-sender-name" style="font-size:11px;font-weight:600;color:${avatarColors[getColorIdx(m.sender)][1]};margin-bottom:2px;padding:0 4px;">${escapeHtml(m.sender)}</div>` : ''}
     ${replyQuoteHtml}
+    ${!isMine && activeChat.isGroup ? `<div class="msg-sender-name" style="font-size:11px;font-weight:600;color:${avatarColors[getColorIdx(m.sender)][1]};margin-bottom:2px;padding:0 4px;word-break:break-word;overflow-wrap:anywhere;max-width:100%;">${escapeHtml(m.sender)}</div>` : ''}
     <div class="msg-bubble">${bubbleInner}</div>
     <div class="msg-time">${formatMsgTime(m.sent_at)}</div>
   </div>

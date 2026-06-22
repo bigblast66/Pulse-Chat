@@ -745,6 +745,7 @@ async def socket_manager(websocket: WebSocket):
                     
                     query="UPDATE read_receipts SET last_read_id=%s WHERE chat_id=%s AND username=%s"
                     await cursor.execute(query,(data["id"],data["chat_id"],payload["username"]))
+                    await r.delete(f"sidebar:{payload['username']}")
                     for soc in user_socket.get(payload["username"],[]):
                         await safe_send(soc,json.dumps({
                             "type":"updated_read_receipt",
