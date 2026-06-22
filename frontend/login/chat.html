@@ -1557,7 +1557,19 @@ async function loadSidebar() {
     const res = await fetch(`${API}/load_sidebar/${sidebarOldestId}`, { credentials: 'include' });
     if (!res.ok) return;
     const rows = await res.json();
-    if (!rows || !rows.length) { sidebarAllLoaded = true; return; }
+    if (!rows || !rows.length) { sidebarAllLoaded = true;
+      if (sidebarMap.size === 0) {
+      list.innerHTML = `
+        <div style="padding:40px 16px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px;">
+          <div style="width:48px;height:48px;border-radius:14px;background:var(--accent-dim);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;">
+            <svg viewBox="0 0 24 24" fill="none" width="22" height="22"><path d="M3 6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7l-4 3V6z" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round"/></svg>
+          </div>
+          <div style="font-size:14px;font-weight:600;color:var(--text-muted)">No conversations yet</div>
+          <div style="font-size:12.5px;color:var(--text-dim);line-height:1.5">Add friends to start chatting</div>
+        </div>`;
+    }
+  return; 
+  }
     for (const row of rows) {
       const [username, chat_id, sender, content, sent_at, last_id, unread_count, group_name, activity_ts] = row;
       const isGroup = username === null;
@@ -1879,7 +1891,7 @@ function sendReadReceipt(chat_id, msg_id) {
 /* ── WEBSOCKET ── */
 function connectWebSocket() {
   // ws = new WebSocket(`ws://127.0.0.1:8000/pulse`);
-  ws = new WebSocket(`wss://pulsechat.qzz.io`);
+  ws = new WebSocket(`wss://pulsechat.qzz.io/pulse`);
 
 
 
