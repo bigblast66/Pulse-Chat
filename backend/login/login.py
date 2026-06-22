@@ -251,6 +251,7 @@ async def signup(x:user_input_signup):
                 }
             
         finally:
+            await connection.rollback()
             await cursor.close()
             pool.release(connection)
     else:
@@ -316,6 +317,7 @@ async def login(x:user_input):
             "status":"fail"
         }
     finally:
+        await connection.rollback()
         await cursor.close()
         pool.release(connection)
 
@@ -376,6 +378,7 @@ async def user_profile(request: Request):
         await r.setex(f"profile:{payload['username']}",300,json.dumps(data))
         return data
     finally:
+        await connection.rollback()
         await cursor.close()
         pool.release(connection)
 class about_input(BaseModel):
@@ -396,6 +399,7 @@ async def update_about(about:about_input,request:Request):
         await cursor.execute(query,(about.about,payload["email"]))
         await connection.commit()
     finally:
+        await connection.rollback()
         await cursor.close()
         pool.release(connection)
 
@@ -449,6 +453,7 @@ async def requests_count(request:Request):
         await r.set(f"req_count:{payload['username']}",req_count[0])
         return data
     finally:
+        await connection.rollback()
         await cursor.close()
         pool.release(connection)
 
@@ -466,6 +471,7 @@ async def requests_list(request:Request):
         req_list=await cursor.fetchall()
         return req_list
     finally:
+        await connection.rollback()
         await cursor.close()
         pool.release(connection)
 
@@ -485,6 +491,7 @@ async def requests_list(request:Request):
         req_list=await cursor.fetchall()
         return req_list
     finally:
+        await connection.rollback()
         await cursor.close()
         pool.release(connection)
 
@@ -592,6 +599,7 @@ async def socket_manager(websocket: WebSocket):
                             }))
                 finally:
                     await connection.commit()
+                    await connection.rollback()
                     await cursor.close()
                     pool.release(connection)
             elif data["type"]=="request_send":
@@ -658,6 +666,7 @@ async def socket_manager(websocket: WebSocket):
                             "req_detail":[e[0],payload["username"],req_time]
                         }))
                 finally:
+                    await connection.rollback()
                     await cursor.close()
                     pool.release(connection)
             elif data["type"]=="request_takeback":
@@ -680,6 +689,7 @@ async def socket_manager(websocket: WebSocket):
                             "req_detail":[data["id"],payload["username"]]
                         }))
                 finally:
+                    await connection.rollback()
                     await cursor.close()
                     pool.release(connection)
             elif data["type"]=="send_message":
@@ -737,6 +747,7 @@ async def socket_manager(websocket: WebSocket):
                         }))
                 finally:
                     await connection.commit()
+                    await connection.rollback()
                     await cursor.close()
                     pool.release(connection)
             elif data["type"]=="update_read_receipt":
@@ -757,6 +768,7 @@ async def socket_manager(websocket: WebSocket):
 
                 finally:
                     await connection.commit()
+                    await connection.rollback()
                     await cursor.close()
                     pool.release(connection)
             elif data["type"]=="typing":
@@ -779,6 +791,7 @@ async def socket_manager(websocket: WebSocket):
                                     "chat_id":data["chat_id"]
                                 }))
                 finally:
+                    await connection.rollback()
                     await cursor.close()
                     pool.release(conn)
             elif data["type"]=="send_message_grp":
@@ -837,6 +850,7 @@ async def socket_manager(websocket: WebSocket):
                                 }))
                 finally:
                     await connection.commit()
+                    await connection.rollback()
                     await cursor.close()
                     pool.release(connection)
             elif data["type"]=='leave_grp':
@@ -849,6 +863,7 @@ async def socket_manager(websocket: WebSocket):
                 except Exception as e:
                     print(e)
                 finally:
+                    await connection.rollback()
                     await cursor.close()
                     pool.release(conn)
 
@@ -908,6 +923,7 @@ LIMIT 50
 
     
     finally:
+        await connection.rollback()
         await cursor.close()
         pool.release(connection)
 
@@ -938,6 +954,7 @@ async def load_sidebar(request:Request,id: int,chat_id:str):
 
     
     finally:
+        await connection.rollback()
         await cursor.close()
         pool.release(connection)
 
@@ -968,6 +985,7 @@ async def load_chat_after(request:Request, id: int, chat_id: str):
 
     
     finally:
+        await connection.rollback()
         await cursor.close()
         pool.release(connection)
 
@@ -1003,6 +1021,7 @@ async def search_sidebar(request:Request,input:str):
         results=await cursor.fetchall()
         return results
     finally:
+        await connection.rollback()
         await cursor.close()
         pool.release(connection)
 
@@ -1021,6 +1040,7 @@ async def search_chat(request:Request,chat_id:str,input:str,id:int):
         results=await cursor.fetchall()
         return results
     finally:
+        await connection.rollback()
         await cursor.close()
         pool.release(connection)
 
@@ -1231,6 +1251,7 @@ async def confirm_media(request:Request,chat_id:str,x:upload_id):
     finally:
         if connection:
             await connection.commit()
+            await connection.rollback()
         if cursor:
             await cursor.close()
         if connection:
@@ -1259,6 +1280,7 @@ async def friends_list(request:Request,user:str):
     except Exception as e:
         print(e)
     finally:
+        await connection.rollback()
         await cursor.close()
         pool.release(connection)
 
@@ -1311,6 +1333,7 @@ async def create_grp(request:Request,x:grp):
     except Exception as e:
         print(e)
     finally:
+        await connection.rollback()
         await cursor.close()
         pool.release(connection)
 
@@ -1329,6 +1352,7 @@ async def grp_members(chat_id:str,request:Request):
         grp_mems=[mem[0] for mem in res]
         return grp_mems
     finally:
+        await connection.rollback()
         await cursor.close()
         pool.release(connection)
 
@@ -1382,5 +1406,6 @@ async def add_to_grp(request:Request,x:grp,chat_id:str):
     except Exception as e:
         print(e)
     finally:
+        await connection.rollback()
         await cursor.close()
         pool.release(connection)
