@@ -59,7 +59,8 @@ async def startup():
         db=DB_NAME,
         ssl=ssl_context,
         minsize=4,
-        maxsize=12
+        maxsize=12,
+        pool_recycle=1800
     )
     # pool=await aiomysql.create_pool(
     #     host=DB_HOST,
@@ -67,7 +68,8 @@ async def startup():
     #     password=DB_PASSWORD,
     #     db=DB_NAME,
     #     minsize=2,
-    #     maxsize=10
+    #     maxsize=10,
+    #     pool_recycle=1800
     # )
 
 
