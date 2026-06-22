@@ -58,8 +58,8 @@ async def startup():
         port=DB_PORT,
         db=DB_NAME,
         ssl=ssl_context,
-        minsize=2,
-        maxsize=10
+        minsize=4,
+        maxsize=12
     )
     # pool=await aiomysql.create_pool(
     #     host=DB_HOST,
