@@ -793,7 +793,7 @@ async def socket_manager(websocket: WebSocket):
                                     "chat_id":data["chat_id"]
                                 }))
                 finally:
-                    await connection.rollback()
+                    await conn.rollback()
                     await cursor.close()
                     pool.release(conn)
             elif data["type"]=="send_message_grp":
@@ -865,7 +865,7 @@ async def socket_manager(websocket: WebSocket):
                 except Exception as e:
                     print(e)
                 finally:
-                    await connection.rollback()
+                    await conn.rollback()
                     await cursor.close()
                     pool.release(conn)
 
