@@ -642,9 +642,10 @@ async def socket_manager(websocket: WebSocket):
                     await cursor.execute(query4,(payload["username"],data["username"],req_time))
                     if await r.exists(f"req_count:{data['username']}"):
                         await r.incr(f"req_count:{data['username']}")
-                    await connection.commit()
                     await cursor.execute(query5)
                     e=await cursor.fetchone()
+
+                    await connection.commit()
                     for soc in user_socket.get(payload["username"],[]):
                         await safe_send(soc,json.dumps({
                             "type":"request_send",
@@ -1159,7 +1160,7 @@ async def confirm_media(request:Request,chat_id:str,x:upload_id):
         query="INSERT INTO attachments (upload_id,file_id,public_url,original_name,content_type,size_bytes) VALUES(%s,%s,%s,%s,%s,%s)"
         query1="SELECT LAST_INSERT_ID()"
         query2="INSERT INTO chats (chat_id,sender,content,sent_at,replied_to,content_type,attachment_id) VALUES(%s,%s,%s,%s,%s,%s,%s)"
-        query3="SELECT a.user1,b.group_name FROM friends as a LEFT JOIN groups_metadata as b ON a.chat_id=b.chat_id WHERE chat_id=%s"
+        query3="SELECT a.user1,b.group_name FROM friends as a LEFT JOIN groups_metadata as b ON a.chat_id=b.chat_id WHERE a.chat_id=%s"
         
         sent_time=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
