@@ -864,11 +864,166 @@ async def socket_manager(websocket: WebSocket):
                     await cursor.execute(query,(payload['username'],data['chat_id']))
                     await cursor.execute(query1,(payload['username'],data['chat_id']))
                     await conn.commit()
+                    await r.delete(f"sidebar:{payload['username']}")
                     for soc in user_socket.get(payload['username'],[]):
                         await safe_send(soc,json.dumps({
                             "type":"grp_left",
                             "chat_id":data['chat_id']
                         }))
+                except Exception as e:
+                    print(e)
+                finally:
+                    await conn.rollback()
+                    await cursor.close()
+                    pool.release(conn)
+            elif data["type"]=='kick_from_grp':
+                query="DELETE FROM friends WHERE user1=%s AND chat_id=%s"
+                query1="DELETE FROM read_receipts WHERE username=%s AND chat_id=%s"
+                query2="SELECT grp_role FROM friends WHERE user1=%s AND chat_id=%s"
+                conn=await pool.acquire()
+                cursor=await conn.cursor()
+                try:
+                    if payload["username"]==data['username']:
+                        continue
+                    await cursor.execute(query2,(payload['username'],data['chat_id']))
+                    role=await cursor.fetchone()
+                    if not role:
+                        continue
+                    if role[0]=='member':
+                        continue
+                    await cursor.execute(query1,(data["username"],data["chat_id"]))
+                    await cursor.execute(query,(data["username"],data["chat_id"]))
+                    await conn.commit()
+                    await r.delete(f"sidebar:{data['username']}")
+
+                    for soc in user_socket.get(data["username"],[]):
+                        await safe_send(soc,json.dumps({
+                            "type":"kicked_from_grp",
+                            "chat_id":data["chat_id"]
+                        }))
+                except Exception as e:
+                    print(e)
+                finally:
+                    await conn.rollback()
+                    await cursor.close()
+                    pool.release(conn)
+            elif data["type"]=='promote_role':
+                
+                query1="UPDATE friends SET grp_role=%s WHERE user1=%s AND chat_id=%s"
+                query2="SELECT grp_role FROM friends WHERE user1=%s AND chat_id=%s"
+                conn=await pool.acquire()
+                cursor=await conn.cursor()
+                try:
+                    if payload["username"]==data['username']:
+                        continue
+                    await cursor.execute(query2,(payload['username'],data['chat_id']))
+                    role=await cursor.fetchone()
+                    if not role:
+                        continue
+                    if role[0]=='member':
+                        continue
+                    await cursor.execute(query2,(data['username'],data['chat_id']))
+                    role=await cursor.fetchone()
+                    if not role:
+                        continue
+                    if role[0]!='member':
+                        continue
+                    await cursor.execute(query1,('admin',data["username"],data["chat_id"]))
+                    
+                    await conn.commit()
+                    
+
+                    for soc in user_socket.get(data["username"],[]):
+                        await safe_send(soc,json.dumps({
+                            "type":"promoted_role",
+                            "chat_id":data["chat_id"],
+                            "role":"admin",
+                            "user":data['username']
+                        }))
+                    for soc in user_socket.get(payload["username"],[]):
+                        await safe_send(soc,json.dumps({
+                            "type":"promoted_role",
+                            "chat_id":data["chat_id"],
+                            "role":"admin",
+                            "user":data['username']
+                        }))
+                except Exception as e:
+                    print(e)
+                finally:
+                    await conn.rollback()
+                    await cursor.close()
+                    pool.release(conn)
+            elif data["type"]=='demote_role':
+                
+                query1="UPDATE friends SET grp_role=%s WHERE user1=%s AND chat_id=%s"
+                query2="SELECT grp_role FROM friends WHERE user1=%s AND chat_id=%s"
+                conn=await pool.acquire()
+                cursor=await conn.cursor()
+                try:
+                    if payload["username"]==data['username']:
+                        continue
+                    await cursor.execute(query2,(payload['username'],data['chat_id']))
+                    role=await cursor.fetchone()
+                    if not role:
+                        continue
+                    if role[0]=='member':
+                        continue
+                    await cursor.execute(query2,(data['username'],data['chat_id']))
+                    role=await cursor.fetchone()
+                    if not role:
+                        continue
+                    if role[0]=='owner':
+                        continue
+                    await cursor.execute(query1,('member',data["username"],data["chat_id"]))
+                    
+                    await conn.commit()
+                    
+
+                    for soc in user_socket.get(data["username"],[]):
+                        await safe_send(soc,json.dumps({
+                            "type":"demoted_role",
+                            "chat_id":data["chat_id"],
+                            "role":"member",
+                            "user":data['username']
+                        }))
+                    for soc in user_socket.get(payload["username"],[]):
+                        await safe_send(soc,json.dumps({
+                            "type":"demoted_role",
+                            "chat_id":data["chat_id"],
+                            "role":"member",
+                            "user":data['username']
+                        }))
+                except Exception as e:
+                    print(e)
+                finally:
+                    await conn.rollback()
+                    await cursor.close()
+                    pool.release(conn)
+            elif data["type"]=="generate_invite_grp":
+                query="SELECT user1,user2 FROM friends WHERE user1=%s AND chat_id=%s"
+                query1="SELECT group_name FROM groups_metadata WHERE chat_id=%s"
+                conn=await pool.acquire()
+                cursor=await conn.cursor()
+                try:
+                    await cursor.execute(query,(payload['username'],data['chat_id']))
+                    res=await cursor.fetchone()
+                    if not res:
+                        continue
+                    if res[1]:
+                        continue
+                    await cursor.execute(query1,(data['chat_id'],))
+                    grp_name=await cursor.fetchone()
+                    payload={
+                        "chat_id":data["chat_id"],
+                        "grp_name":grp_name[0],
+                        "exp":datetime.now(timezone.utc)+timedelta(hours=3)
+                    }
+                    token=jwt.encode(payload,SECRET_KEY,algorithm="HS256")
+                    await safe_send(websocket,json.dumps({
+                        "type":"grp_invite",
+                        "token":token,
+                        "validity":"3hrs"
+                    }))
                 except Exception as e:
                     print(e)
                 finally:
@@ -1308,16 +1463,16 @@ async def create_grp(request:Request,x:grp):
         if await r.exists(f"blacklist:{token}"):
             return
         payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
-        query1="INSERT INTO friends (user1,friend_date,chat_id) VALUES(%s,%s,%s)"
+        query1="INSERT INTO friends (user1,friend_date,chat_id,grp_role) VALUES(%s,%s,%s,%s)"
         query2="INSERT INTO groups_metadata (chat_id,group_name,created_date,created_by) VALUES(%s,%s,%s,%s)"
         query3="INSERT INTO read_receipts (last_read_id,chat_id,username) VALUES(%s,%s,%s)"
         created_date=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         chat_id=str(uuid.uuid4())
         await cursor.execute(query2,(chat_id,x.group_name,created_date,payload['username']))
-        await cursor.execute(query1,(payload['username'],created_date,chat_id))
+        await cursor.execute(query1,(payload['username'],created_date,chat_id,'owner'))
         for users in x.memebers:
             if users!=payload['username']:
-                await cursor.execute(query1,(users,created_date,chat_id))
+                await cursor.execute(query1,(users,created_date,chat_id,'member'))
                 await cursor.execute(query3,(0,chat_id,users))
         await cursor.execute(query3,(0,chat_id,payload['username']))
 
@@ -1362,7 +1517,7 @@ async def grp_members(chat_id:str,request:Request):
         if await r.exists(f"blacklist:{token}"):
             return
         payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
-        await cursor.execute("SELECT user1 FROM friends WHERE chat_id=%s",(chat_id,))
+        await cursor.execute("SELECT user1,grp_role FROM friends WHERE chat_id=%s",(chat_id,))
         res=await cursor.fetchall()
         grp_mems=[mem[0] for mem in res]
         return grp_mems
@@ -1380,17 +1535,23 @@ async def add_to_grp(request:Request,x:grp,chat_id:str):
         if await r.exists(f"blacklist:{token}"):
             return
         payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
-        query1="INSERT INTO friends (user1,friend_date,chat_id) VALUES(%s,%s,%s)"
+        query1="INSERT INTO friends (user1,friend_date,chat_id,grp_role) VALUES(%s,%s,%s,%s)"
         query2="SELECT MAX(id) FROM chats WHERE chat_id=%s"
         query3="INSERT INTO read_receipts (last_read_id,chat_id,username) VALUES(%s,%s,%s)"
         added_date=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-    
+
+        await cursor.execute("SELECT user1,grp_role FROM friends WHERE chat_id=%s AND user1=%s",(chat_id,payload["username"]))
+        res= await cursor.fetchone()
+        if not res or not res[1]:
+            raise HTTPException(status_code=403,detail="not in group")
+
+
         await cursor.execute(query2,(chat_id,))
         read_receipt_id=await cursor.fetchone()
         read_receipt_id=read_receipt_id[0]
         for users in x.memebers:
             if users!=payload['username']:
-                await cursor.execute(query1,(users,added_date,chat_id))
+                await cursor.execute(query1,(users,added_date,chat_id,'member'))
                 await cursor.execute(query3,(read_receipt_id,chat_id,users))
        
 
@@ -1406,14 +1567,60 @@ async def add_to_grp(request:Request,x:grp,chat_id:str):
                         
                     }))
         
-        await r.delete(f"sidebar:{payload['username']}")
         
-        for soc in user_socket.get(payload['username'],[]):
-                await safe_send(soc,json.dumps({
-                    "type":"added_to_grp",
-                    "grp_name":x.group_name,
-                    "chat_id":chat_id
-                }))
+        
+        
+        return {
+            "grp_addition":"success"
+        }
+
+    except Exception as e:
+        print(e)
+    finally:
+        await connection.rollback()
+        await cursor.close()
+        pool.release(connection)
+
+class invite_token(BaseModel):
+    token:str
+
+@app.post("/add_to_group_invite")
+async def grp_invite(request:Request,x:invite_token):
+    token=request.cookies.get("token")
+    connection=await pool.acquire()
+    cursor=await connection.cursor()
+    try:
+        if await r.exists(f"blacklist:{token}"):
+            return
+        payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+        payload1=jwt.decode(x.token,SECRET_KEY,algorithms=["HS256"])
+        chat_id=payload1["chat_id"]
+        query1="INSERT INTO friends (user1,friend_date,chat_id,grp_role) VALUES(%s,%s,%s,%s)"
+        query2="SELECT MAX(id) FROM chats WHERE chat_id=%s"
+        query3="INSERT INTO read_receipts (last_read_id,chat_id,username) VALUES(%s,%s,%s)"
+        added_date=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    
+        await cursor.execute(query2,(chat_id,))
+        read_receipt_id=await cursor.fetchone()
+        read_receipt_id=read_receipt_id[0]
+        
+        await cursor.execute(query1,(payload["username"],added_date,chat_id,'member'))
+        await cursor.execute(query3,(read_receipt_id,chat_id,payload["username"]))
+       
+
+        await connection.commit()
+        
+        await r.delete(f"sidebar:{payload['username']}")
+        for soc in user_socket.get(payload["username"],[]):
+            await safe_send(soc,json.dumps({
+                "type":"added_to_grp",
+                "grp_name":payload1["grp_name"],
+                "chat_id":chat_id
+                
+            }))
+        
+        
+        
         return {
             "grp_addition":"success"
         }
