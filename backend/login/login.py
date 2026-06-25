@@ -62,6 +62,7 @@ async def startup():
         maxsize=12,
         pool_recycle=1800
     )
+    # global pool
     # pool=await aiomysql.create_pool(
     #     host=DB_HOST,
     #     user=DB_USER,
@@ -83,8 +84,8 @@ async def shutdown():
 
 
 
-# r=redis.Redis(host=REDIS_HOST,port=REDIS_PORT,decode_responses=True)
-r=redis.from_url(os.getenv("REDIS_URL"),decode_responses=True)
+r=redis.Redis(host=REDIS_HOST,port=REDIS_PORT,decode_responses=True)
+# r=redis.from_url(os.getenv("REDIS_URL"),decode_responses=True)
 
 
 
@@ -891,6 +892,12 @@ async def socket_manager(websocket: WebSocket):
                         continue
                     if role[0]=='member':
                         continue
+                    await cursor.execute(query2,(data['username'],data['chat_id']))
+                    role=await cursor.fetchone()
+                    if not role:
+                        continue
+                    if role[0]=='owner':
+                        continue
                     await cursor.execute(query1,(data["username"],data["chat_id"]))
                     await cursor.execute(query,(data["username"],data["chat_id"]))
                     await conn.commit()
@@ -1013,15 +1020,15 @@ async def socket_manager(websocket: WebSocket):
                         continue
                     await cursor.execute(query1,(data['chat_id'],))
                     grp_name=await cursor.fetchone()
-                    payload={
+                    inv_payload={
                         "chat_id":data["chat_id"],
                         "grp_name":grp_name[0],
                         "exp":datetime.now(timezone.utc)+timedelta(hours=3)
                     }
-                    token=jwt.encode(payload,SECRET_KEY,algorithm="HS256")
+                    inv_token=jwt.encode(inv_payload,SECRET_KEY,algorithm="HS256")
                     await safe_send(websocket,json.dumps({
                         "type":"grp_invite",
-                        "token":token,
+                        "token":inv_token,
                         "validity":"3hrs"
                     }))
                 except Exception as e:
@@ -1526,6 +1533,28 @@ async def grp_members(chat_id:str,request:Request):
         await cursor.close()
         pool.release(connection)
 
+@app.get("/grp_members_roles/{chat_id}")
+async def grp_members_roles(chat_id:str,request:Request):
+    """
+    returns [username, role] pairs for every member of a group chat.
+    used by the frontend to render the member list with owner/admin/member
+    badges, and to decide whether the current viewer gets promote/demote controls.
+    """
+    token=request.cookies.get("token")
+    connection=await pool.acquire()
+    cursor=await connection.cursor()
+    try:
+        if await r.exists(f"blacklist:{token}"):
+            return
+        payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+        await cursor.execute("SELECT user1,grp_role FROM friends WHERE chat_id=%s AND user1 IS NOT NULL",(chat_id,))
+        res=await cursor.fetchall()
+        return res
+    finally:
+        await connection.rollback()
+        await cursor.close()
+        pool.release(connection)
+
 @app.post("/add_to_group/{chat_id}")
 async def add_to_grp(request:Request,x:grp,chat_id:str):
     token=request.cookies.get("token")
@@ -1593,7 +1622,12 @@ async def grp_invite(request:Request,x:invite_token):
         if await r.exists(f"blacklist:{token}"):
             return
         payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
-        payload1=jwt.decode(x.token,SECRET_KEY,algorithms=["HS256"])
+        try:
+            payload1=jwt.decode(x.token,SECRET_KEY,algorithms=["HS256"])
+        except jwt.exceptions.ExpiredSignatureError:
+            return JSONResponse(content={"grp_addition":"fail","reason":"expired"},status_code=400)
+        except jwt.exceptions.DecodeError:
+            return JSONResponse(content={"grp_addition":"fail","reason":"invalid"},status_code=400)
         chat_id=payload1["chat_id"]
         query1="INSERT INTO friends (user1,friend_date,chat_id,grp_role) VALUES(%s,%s,%s,%s)"
         query2="SELECT MAX(id) FROM chats WHERE chat_id=%s"

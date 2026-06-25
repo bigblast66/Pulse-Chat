@@ -1102,6 +1102,9 @@ body::before {
         <button class="icon-btn" title="Search in chat" onclick="toggleChatSearch()">
           <svg viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
         </button>
+        <button class="icon-btn" id="view-members-btn" title="Group members" onclick="openGroupMembers()" style="display:none;">
+  <svg viewBox="0 0 18 18" fill="none"><circle cx="6" cy="6" r="2.4" stroke="currentColor" stroke-width="1.5"/><circle cx="13" cy="7" r="2" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 16c0-3 2-5.5 4.5-5.5s4.5 2.5 4.5 5.5M11 16c0-2.2 1-4 3-4.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+</button>
         <button class="icon-btn" id="add-members-btn" title="Add members" onclick="openAddMembers()" style="display:none;">
   <svg viewBox="0 0 18 18" fill="none"><circle cx="7" cy="6.5" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M1.5 16c0-3 2.5-5.5 5.5-5.5M13 4v6M10 7h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
 </button>
@@ -1188,7 +1191,7 @@ body::before {
   </button>
   <button class="bottom-nav-btn" id="bnav-requests" onclick="openRequests()">
     <svg viewBox="0 0 20 20" fill="none"><circle cx="8" cy="7" r="3.5" stroke="currentColor" stroke-width="1.5"/><path d="M2 17c0-3.314 2.686-6 6-6M14 11v6M11 14h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-    <span>Friends</span>
+    <span>Requests</span>
     <span class="bottom-nav-badge" id="bnav-badge" style="display:none"></span>
   </button>
   <button class="bottom-nav-btn" id="bnav-profile" onclick="openProfile()">
@@ -1291,7 +1294,30 @@ body::before {
   </div>
 </div>
 
+<!-- GROUP MEMBERS MODAL -->
+<div class="overlay" id="group-members-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title" id="grp-members-title">Group Members</span>
+      <button class="close-btn" onclick="closeModal('group-members-modal')">
+        <svg viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="grp-member-list" id="grp-members-roles-list" style="max-height:360px;"></div>
+    <div style="padding:14px 20px;padding-bottom:calc(14px + var(--safe-bottom));border-top:1px solid var(--border);">
+      <div id="invite-link-row" style="display:none;gap:8px;align-items:center;margin-bottom:10px;">
+        <input type="text" id="invite-link-input" class="search-input" readonly style="flex:1;padding-left:12px;font-family:'DM Mono',monospace;font-size:12px;">
+        <button class="req-accept" onclick="copyInviteLink()">Copy</button>
+      </div>
+      <div id="invite-link-hint" style="display:none;font-size:11.5px;color:var(--text-dim);margin-bottom:10px;"></div>
+      <button class="btn-secondary" style="width:100%" onclick="generateInviteLink()" id="gen-invite-btn">Generate invite link</button>
+    </div>
+  </div>
+</div>
+
 <!-- LIGHTBOX -->
+
 <div class="lightbox" id="lightbox" onclick="if(event.target===this) closeLightbox()">
   <div class="lightbox-topbar">
     <div class="lightbox-info">
@@ -1315,8 +1341,8 @@ body::before {
 <div class="toast" id="toast"><div class="toast-dot"></div><span id="toast-msg"></span></div>
 
 <script>
-// const API = 'http://127.0.0.1:8000';
-const API = 'https://pulsechat.qzz.io';
+const API = 'http://127.0.0.1:8000';
+// const API = 'https://pulsechat.qzz.io';
 let ws;
 let currentUsername;
 let originalAbout = '';
@@ -1532,11 +1558,29 @@ document.addEventListener('DOMContentLoaded', async () => {
   connectWebSocket();
   document.getElementById('contact-list').addEventListener('scroll', onSidebarScroll);
   const params = new URLSearchParams(window.location.search);
+  const inviteToken = params.get('invite');
+  if (inviteToken) {
+    try {
+      const res = await fetch(`${API}/add_to_group_invite`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ token: inviteToken })
+      });
+      let data = null;
+      try { data = await res.json(); } catch (_) {}
+      if (res.ok && data && data.grp_addition === 'success') showToast('Joined group!');
+      else if (data && data.reason === 'already_member') showToast('You are already in this group');
+      else if (data && data.reason === 'expired') showToast('Invite link has expired', true);
+      else showToast('Invite link is invalid or expired', true);
+    } catch (e) {
+      showToast('Invite link is invalid or expired', true);
+    }
+  }
   const chatIdFromUrl = params.get('c');
   if (chatIdFromUrl) {
     const tryOpen = () => { if (sidebarMap.has(chatIdFromUrl)) openChat(chatIdFromUrl); };
     tryOpen(); setTimeout(tryOpen, 400);
   }
+  if (inviteToken) history.replaceState({}, '', window.location.pathname + (chatIdFromUrl ? `?c=${chatIdFromUrl}` : ''));
 });
 
 /* ── SIDEBAR ── */
@@ -1670,6 +1714,7 @@ async function openChat(chat_id) {
   const statusEl = document.getElementById('chat-status');
   statusEl.className = 'chat-header-status';
   statusEl.textContent = entry.isGroup ? 'Group' : '';
+  document.getElementById('view-members-btn').style.display = entry.isGroup ? 'flex' : 'none';
   document.getElementById('add-members-btn').style.display = entry.isGroup ? 'flex' : 'none';
   document.getElementById('leave-grp-btn').style.display = entry.isGroup ? 'flex' : 'none';
 
@@ -1729,6 +1774,7 @@ function leaveGroup() {
   document.getElementById('empty-state').style.display = '';
   document.getElementById('leave-grp-btn').style.display = 'none';
   document.getElementById('add-members-btn').style.display = 'none';
+  document.getElementById('view-members-btn').style.display = 'none';
   renderSidebar();
   if (window.innerWidth <= 768) {
     document.getElementById('sidebar').classList.remove('hidden');
@@ -1922,8 +1968,8 @@ function sendReadReceipt(chat_id, msg_id) {
 
 /* ── WEBSOCKET ── */
 function connectWebSocket() {
-  // ws = new WebSocket(`ws://127.0.0.1:8000/pulse`);
-  ws = new WebSocket(`wss://pulsechat.qzz.io/pulse`);
+  ws = new WebSocket(`ws://127.0.0.1:8000/pulse`);
+  // ws = new WebSocket(`wss://pulsechat.qzz.io/pulse`);
 
 
 
@@ -2043,6 +2089,7 @@ function connectWebSocket() {
       document.getElementById('empty-state').style.display = '';
       document.getElementById('leave-grp-btn').style.display = 'none';
       document.getElementById('add-members-btn').style.display = 'none';
+      document.getElementById('view-members-btn').style.display = 'none';
       if (window.innerWidth <= 768) {
         document.getElementById('sidebar').classList.remove('hidden');
         document.getElementById('main').classList.remove('visible');
@@ -2052,6 +2099,51 @@ function connectWebSocket() {
     }
     renderSidebar();
     showToast('Left group');
+  }
+  if (msg.type === 'promoted_role' || msg.type === 'demoted_role') {
+    const becameAdmin = msg.type === 'promoted_role';
+    if (msg.user === currentUsername) showToast(becameAdmin ? 'You are now an admin' : 'You were moved back to member');
+    const modalOpen = document.getElementById('group-members-modal').classList.contains('open');
+    if (modalOpen && activeChat && activeChat.chat_id === msg.chat_id) openGroupMembers();
+  }
+  if (msg.type === 'grp_invite') {
+    const btn = document.getElementById('gen-invite-btn');
+    if (btn) btn.textContent = 'Generate invite link';
+    const link = `${location.origin}${location.pathname}?invite=${encodeURIComponent(msg.token)}`;
+    const input = document.getElementById('invite-link-input');
+    const hint = document.getElementById('invite-link-hint');
+    if (input) input.value = link;
+    document.getElementById('invite-link-row').style.display = 'flex';
+    if (hint) { hint.textContent = `Anyone with this link can join. Expires in ${msg.validity}.`; hint.style.display = 'block'; }
+  }
+  if (msg.type === 'kicked_from_grp') {
+    const entry = sidebarMap.get(msg.chat_id);
+    const grpName = entry ? entry.username : 'the group';
+    sidebarMap.delete(msg.chat_id);
+    if (document.getElementById('group-members-modal').classList.contains('open')) closeModal('group-members-modal');
+    if (activeChat && activeChat.chat_id === msg.chat_id) {
+      activeChat = null;
+      clearReply();
+      document.getElementById('chat-area').classList.remove('visible');
+      document.getElementById('chat-area').style.display = 'none';
+      document.getElementById('empty-state').style.display = '';
+      document.getElementById('leave-grp-btn').style.display = 'none';
+      document.getElementById('add-members-btn').style.display = 'none';
+      document.getElementById('view-members-btn').style.display = 'none';
+      if (window.innerWidth <= 768) {
+        document.getElementById('sidebar').classList.remove('hidden');
+        document.getElementById('main').classList.remove('visible');
+        document.body.classList.remove('in-chat');
+      }
+      history.pushState({}, '', window.location.pathname);
+    }
+    renderSidebar();
+    showToast(`You were removed from "${grpName}"`, true);
+  }
+  if (msg.type === 'removed_from_grp') {
+    showToast(`${msg.username} was removed from the group`);
+    const modalOpen = document.getElementById('group-members-modal').classList.contains('open');
+    if (modalOpen && activeChat && activeChat.chat_id === msg.chat_id) openGroupMembers();
   }
   };
   ws.onclose = () => setTimeout(() => connectWebSocket(), 3000);
@@ -2489,6 +2581,90 @@ function toggleGroupMember(username) {
 }
 
 
+
+/* ── GROUP MEMBERS / ROLES / INVITE LINK ── */
+let currentGroupRole = null;
+
+async function openGroupMembers() {
+  if (!activeChat || !activeChat.isGroup) return;
+  document.getElementById('grp-members-title').textContent = `${activeChat.username} · Members`;
+  document.getElementById('invite-link-row').style.display = 'none';
+  document.getElementById('invite-link-hint').style.display = 'none';
+  document.getElementById('invite-link-input').value = '';
+  document.getElementById('gen-invite-btn').textContent = 'Generate invite link';
+  const list = document.getElementById('grp-members-roles-list');
+  list.innerHTML = `<div class="empty-requests">Loading…</div>`;
+  document.getElementById('group-members-modal').classList.add('open');
+  try {
+    const res = await fetch(`${API}/grp_members_roles/${activeChat.chat_id}`, { credentials: 'include' });
+    if (!res.ok) { list.innerHTML = `<div class="empty-requests">Failed to load members</div>`; return; }
+    const members = await res.json();
+    const mine = members.find(m => m[0] === currentUsername);
+    currentGroupRole = mine ? mine[1] : 'member';
+    renderGroupMembersRoles(members);
+  } catch (e) {
+    list.innerHTML = `<div class="empty-requests">Failed to load members</div>`;
+  }
+}
+
+function renderGroupMembersRoles(members) {
+  const list = document.getElementById('grp-members-roles-list');
+  const canManage = currentGroupRole === 'owner' || currentGroupRole === 'admin';
+  if (!members || !members.length) { list.innerHTML = `<div class="empty-requests">No members</div>`; return; }
+  const order = { owner: 0, admin: 1, member: 2 };
+  const sorted = [...members].sort((a, b) => (order[a[1]] ?? 3) - (order[b[1]] ?? 3) || a[0].localeCompare(b[0]));
+  list.innerHTML = sorted.map(([username, role]) => {
+    const [bg, fg] = avatarColors[getColorIdx(username)];
+    const isSelf = username === currentUsername;
+    const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
+    let actionHtml = '';
+    if (canManage && !isSelf && role !== 'owner') {
+      if (role === 'member') actionHtml += `<button class="req-accept" onclick="promoteMember('${username}')">Promote</button>`;
+      else if (role === 'admin') actionHtml += `<button class="req-decline" onclick="demoteMember('${username}')">Demote</button>`;
+      actionHtml += `<button class="req-decline" onclick="removeMember('${username}')" title="Remove from group" style="color:var(--danger);border-color:rgba(224,92,92,0.35);">Remove</button>`;
+    }
+    return `
+    <div class="grp-member-row" style="cursor:default;">
+      <div class="grp-member-avatar" style="background:${bg}20;color:${fg}">${initials(username)}</div>
+      <div class="grp-member-name">${escapeHtml(username)}${isSelf ? ' (you)' : ''}</div>
+      <span style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-right:6px;flex-shrink:0;">${roleLabel}</span>
+      <div style="display:flex;gap:6px;flex-shrink:0;">${actionHtml}</div>
+    </div>`;
+  }).join('');
+}
+
+function promoteMember(username) {
+  if (!activeChat || !ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({ type: 'promote_role', username, chat_id: activeChat.chat_id }));
+}
+function demoteMember(username) {
+  if (!activeChat || !ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({ type: 'demote_role', username, chat_id: activeChat.chat_id }));
+}
+function removeMember(username) {
+  if (!activeChat || !ws || ws.readyState !== WebSocket.OPEN) return;
+  if (!confirm(`Remove ${username} from "${activeChat.username}"?`)) return;
+  ws.send(JSON.stringify({ type: 'kick_from_grp', username, chat_id: activeChat.chat_id }));
+}
+
+function generateInviteLink() {
+  if (!activeChat || !activeChat.isGroup || !ws || ws.readyState !== WebSocket.OPEN) return;
+  document.getElementById('gen-invite-btn').textContent = 'Generating…';
+  ws.send(JSON.stringify({ type: 'generate_invite_grp', chat_id: activeChat.chat_id }));
+}
+
+function copyInviteLink() {
+  const input = document.getElementById('invite-link-input');
+  if (!input.value) return;
+  input.select();
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(input.value).then(() => showToast('Invite link copied')).catch(() => {
+      document.execCommand('copy'); showToast('Invite link copied');
+    });
+  } else {
+    document.execCommand('copy'); showToast('Invite link copied');
+  }
+}
 
 /* ── BADGE ── */
 function updateRequestBadge(count) {
