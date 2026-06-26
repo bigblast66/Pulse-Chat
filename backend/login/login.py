@@ -18,6 +18,7 @@ import ssl
 import httpx
 from typing import Optional
 import uuid
+import asyncio
 
 load_dotenv()
 
@@ -28,6 +29,7 @@ DB_NAME = os.getenv("DB_NAME")
 REDIS_HOST = os.getenv("REDIS_HOST")
 REDIS_PORT = int(os.getenv("REDIS_PORT"))
 ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "").split(",")
+SUBSCRIBE_TOPIC=os.getenv("SUBS_TOPIC")
 cert_content= os.getenv("DB_CERT")
 DB_PORT= int(os.getenv("DB_PORT"))
 
@@ -42,6 +44,24 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"]
 )
+
+
+user_socket={}
+socket_user={}
+
+async def pubsub_listen():
+    pubsub=r.pubsub()
+    await pubsub.subscribe(f"{SUBSCRIBE_TOPIC}")
+    async for message in pubsub.listen():
+        if message["type"]!="message":
+            continue
+        data=json.loads(message["data"])
+        user=data["user"]
+        payload=data["payload"]
+        for soc in user_socket.get(user,[]):
+            await safe_send(soc,json.dumps(payload))
+        
+
 
 
 
@@ -72,6 +92,7 @@ async def startup():
     #     maxsize=10,
     #     pool_recycle=1800
     # )
+    asyncio.create_task(pubsub_listen())
 
 
 
@@ -498,8 +519,6 @@ async def requests_list(request:Request):
         await cursor.close()
         pool.release(connection)
 
-user_socket={}
-socket_user={}
 
 async def safe_send(soc, data: str):
     """Send to a websocket, silently removing it if it's already closed."""
@@ -571,35 +590,33 @@ async def socket_manager(websocket: WebSocket):
                         await cursor.execute(query6,(0,chat_id,data["username"]))
 
                         
-                        for soc in user_socket.get(data["username"],[]):
-                            await safe_send(soc,json.dumps({
-                                "type":"request",
-                                "status":"accepted",
-                                "username":socket_user[websocket],
-                                "chat_id":chat_id
-                            }))
-                        for soc in user_socket.get(payload["username"],[]):
-                            await safe_send(soc,json.dumps({
-                                "type":"request",
-                                "status":"accepted",
-                                "username":data["username"],
-                                "chat_id":chat_id
-                            }))
-                    else:
                         
-                        for soc in user_socket.get(data["username"],[]):
-                            await safe_send(soc,json.dumps({
-                                "type":"request",
-                                "status":"rejected",
-                                "username":socket_user[websocket]
-                            }))
-                            #sending to the guy who rejected maybe multiple tabs
-                        for soc in user_socket.get(payload["username"],[]):
-                            await safe_send(soc,json.dumps({
-                                "type":"request",
-                                "status":"rejected",
-                                "username":data["username"]
-                            }))
+                        await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":data["username"],"payload":{
+                            "type":"request",
+                            "status":"accepted",
+                            "username":socket_user[websocket],
+                            "chat_id":chat_id
+                        }}))
+                        
+                        await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":payload["username"],"payload":{
+                            "type":"request",
+                            "status":"accepted",
+                            "username":data["username"],
+                            "chat_id":chat_id
+                        }}))
+                    else:
+                        await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":data["username"],"payload":{
+                            "type":"request",
+                            "status":"rejected",
+                            "username":socket_user[websocket]
+                        }}))
+                        #sending to the guy who rejected maybe multiple tabs
+                    
+                        await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":payload["username"],"payload":{
+                            "type":"request",
+                            "status":"rejected",
+                            "username":data["username"]
+                        }}))
                 finally:
                     await connection.commit()
                     await connection.rollback()
@@ -657,17 +674,17 @@ async def socket_manager(websocket: WebSocket):
                     e=await cursor.fetchone()
 
                     await connection.commit()
-                    for soc in user_socket.get(payload["username"],[]):
-                        await safe_send(soc,json.dumps({
-                            "type":"request_send",
-                            "reason":"success",
-                            "req_detail":[e[0],data["username"],req_time]
-                        }))
-                    for soc in user_socket.get(data["username"],[]):
-                        await safe_send(soc,json.dumps({
-                            "type":"request_receive",
-                            "req_detail":[e[0],payload["username"],req_time]
-                        }))
+                    
+                    await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":payload["username"],"payload":{
+                        "type":"request_send",
+                        "reason":"success",
+                        "req_detail":[e[0],data["username"],req_time]
+                    }}))
+                  
+                    await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":data["username"],"payload":{
+                        "type":"request_receive",
+                        "req_detail":[e[0],payload["username"],req_time]
+                    }}))
                 finally:
                     await connection.rollback()
                     await cursor.close()
@@ -681,16 +698,16 @@ async def socket_manager(websocket: WebSocket):
                     if await r.exists(f"req_count:{data['username']}"):
                         await r.decr(f"req_count:{data['username']}")
                     await connection.commit()
-                    for soc in user_socket.get(payload["username"],[]):
-                        await safe_send(soc,json.dumps({
-                            "type":"request_takeback",
-                            "req_detail":[data["id"],data["username"]]
-                        }))
-                    for soc in user_socket.get(data["username"],[]):
-                        await safe_send(soc,json.dumps({
-                            "type":"request_takeback",
-                            "req_detail":[data["id"],payload["username"]]
-                        }))
+                
+                    await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":payload["username"],"payload":{
+                        "type":"request_takeback",
+                        "req_detail":[data["id"],data["username"]]
+                    }}))
+                
+                    await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":data["username"],"payload":{
+                        "type":"request_takeback",
+                        "req_detail":[data["id"],payload["username"]]
+                    }}))
                 finally:
                     await connection.rollback()
                     await cursor.close()
@@ -726,28 +743,28 @@ async def socket_manager(websocket: WebSocket):
                     res=await cursor.fetchone()
                     await r.delete(f"sidebar:{payload['username']}")
                     await r.delete(f"sidebar:{data['username']}")
-                    for soc in user_socket.get(payload["username"],[]):
-                        await safe_send(soc,json.dumps({
-                            "type":"sent_message",
-                            "content":data["content"],
-                            "chat_id":data["chat_id"],
-                            "sent_at":sent_time,
-                            "id":res[0],
-                            "sender":payload["username"],
-                            "replied_to":replied,
-                            "replied_content":replied_content
-                        }))
-                    for soc in user_socket.get(data["username"],[]):
-                        await safe_send(soc,json.dumps({
-                            "type":"receive_message",
-                            "content":data["content"],
-                            "chat_id":data["chat_id"],
-                            "sent_at":sent_time,
-                            "id":res[0],
-                            "sender":payload["username"],
-                            "replied_to":replied,
-                            "replied_content":replied_content
-                        }))
+                    
+                    await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":payload["username"],"payload":{
+                        "type":"sent_message",
+                        "content":data["content"],
+                        "chat_id":data["chat_id"],
+                        "sent_at":sent_time,
+                        "id":res[0],
+                        "sender":payload["username"],
+                        "replied_to":replied,
+                        "replied_content":replied_content
+                    }}))
+                
+                    await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":data["username"],"payload":{
+                        "type":"receive_message",
+                        "content":data["content"],
+                        "chat_id":data["chat_id"],
+                        "sent_at":sent_time,
+                        "id":res[0],
+                        "sender":payload["username"],
+                        "replied_to":replied,
+                        "replied_content":replied_content
+                    }}))
                 finally:
                     await connection.commit()
                     await connection.rollback()
@@ -761,12 +778,12 @@ async def socket_manager(websocket: WebSocket):
                     query="UPDATE read_receipts SET last_read_id=%s WHERE chat_id=%s AND username=%s"
                     await cursor.execute(query,(data["id"],data["chat_id"],payload["username"]))
                     await r.delete(f"sidebar:{payload['username']}")
-                    for soc in user_socket.get(payload["username"],[]):
-                        await safe_send(soc,json.dumps({
-                            "type":"updated_read_receipt",
-                            "id":data["id"],
-                            "chat_id":data["chat_id"]
-                        }))
+                
+                    await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":payload["username"],"payload":{
+                        "type":"updated_read_receipt",
+                        "id":data["id"],
+                        "chat_id":data["chat_id"]
+                    }}))
 
 
                 finally:
@@ -787,12 +804,11 @@ async def socket_manager(websocket: WebSocket):
                     mem=[members[0] for members in mem]
                     for user in mem:
                         if user!=payload['username']:
-                            for soc in user_socket.get(user,[]):
-                                await safe_send(soc,json.dumps({
-                                    "type":"typing",
-                                    "username":payload['username'],
-                                    "chat_id":data["chat_id"]
-                                }))
+                            await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":user,"payload":{
+                                "type":"typing",
+                                "username":payload['username'],
+                                "chat_id":data["chat_id"]
+                            }}))
                 finally:
                     await conn.rollback()
                     await cursor.close()
@@ -824,33 +840,33 @@ async def socket_manager(websocket: WebSocket):
                     await cursor.execute(query4)
                     id=await cursor.fetchone()
                     await r.delete(f"sidebar:{payload['username']}")
-                    for soc in user_socket.get(payload["username"],[]):
-                        await safe_send(soc,json.dumps({
-                            "type":"sent_message_grp",
-                            "content":data["content"],
-                            "chat_id":data["chat_id"],
-                            "sent_at":sent_time,
-                            "id":id[0],
-                            "sender":payload["username"],
-                            "grp_name":grp_name,
-                            "replied_to":replied,
-                            "replied_content":replied_content
-                        }))
+                    
+                    await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":payload["username"],"payload":{
+                        "type":"sent_message_grp",
+                        "content":data["content"],
+                        "chat_id":data["chat_id"],
+                        "sent_at":sent_time,
+                        "id":id[0],
+                        "sender":payload["username"],
+                        "grp_name":grp_name,
+                        "replied_to":replied,
+                        "replied_content":replied_content
+                    }}))
                     for user in member_list:
                         if user!=payload['username']:
                             await r.delete(f"sidebar:{user}")
-                            for soc in user_socket.get(user,[]):
-                                await safe_send(soc,json.dumps({
-                                    "type":"receive_message_grp",
-                                    "content":data["content"],
-                                    "chat_id":data["chat_id"],
-                                    "sent_at":sent_time,
-                                    "id":id[0],
-                                    "sender":payload["username"],
-                                    "grp_name":grp_name,
-                                    "replied_to":replied,
-                                    "replied_content":replied_content
-                                }))
+                            
+                            await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":user,"payload":{
+                                "type":"receive_message_grp",
+                                "content":data["content"],
+                                "chat_id":data["chat_id"],
+                                "sent_at":sent_time,
+                                "id":id[0],
+                                "sender":payload["username"],
+                                "grp_name":grp_name,
+                                "replied_to":replied,
+                                "replied_content":replied_content
+                            }}))
                 finally:
                     await connection.commit()
                     await connection.rollback()
@@ -866,11 +882,11 @@ async def socket_manager(websocket: WebSocket):
                     await cursor.execute(query1,(payload['username'],data['chat_id']))
                     await conn.commit()
                     await r.delete(f"sidebar:{payload['username']}")
-                    for soc in user_socket.get(payload['username'],[]):
-                        await safe_send(soc,json.dumps({
-                            "type":"grp_left",
-                            "chat_id":data['chat_id']
-                        }))
+                 
+                    await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":payload["username"],"payload":{
+                        "type":"grp_left",
+                        "chat_id":data['chat_id']
+                    }}))
                 except Exception as e:
                     print(e)
                 finally:
@@ -903,11 +919,11 @@ async def socket_manager(websocket: WebSocket):
                     await conn.commit()
                     await r.delete(f"sidebar:{data['username']}")
 
-                    for soc in user_socket.get(data["username"],[]):
-                        await safe_send(soc,json.dumps({
-                            "type":"kicked_from_grp",
-                            "chat_id":data["chat_id"]
-                        }))
+                    
+                    await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":data["username"],"payload":{
+                        "type":"kicked_from_grp",
+                        "chat_id":data["chat_id"]
+                    }}))
                 except Exception as e:
                     print(e)
                 finally:
@@ -940,20 +956,20 @@ async def socket_manager(websocket: WebSocket):
                     await conn.commit()
                     
 
-                    for soc in user_socket.get(data["username"],[]):
-                        await safe_send(soc,json.dumps({
-                            "type":"promoted_role",
-                            "chat_id":data["chat_id"],
-                            "role":"admin",
-                            "user":data['username']
-                        }))
-                    for soc in user_socket.get(payload["username"],[]):
-                        await safe_send(soc,json.dumps({
-                            "type":"promoted_role",
-                            "chat_id":data["chat_id"],
-                            "role":"admin",
-                            "user":data['username']
-                        }))
+                  
+                    await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":data["username"],"payload":{
+                        "type":"promoted_role",
+                        "chat_id":data["chat_id"],
+                        "role":"admin",
+                        "user":data['username']
+                    }}))
+                    
+                    await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":payload["username"],"payload":{
+                        "type":"promoted_role",
+                        "chat_id":data["chat_id"],
+                        "role":"admin",
+                        "user":data['username']
+                    }}))
                 except Exception as e:
                     print(e)
                 finally:
@@ -986,20 +1002,20 @@ async def socket_manager(websocket: WebSocket):
                     await conn.commit()
                     
 
-                    for soc in user_socket.get(data["username"],[]):
-                        await safe_send(soc,json.dumps({
-                            "type":"demoted_role",
-                            "chat_id":data["chat_id"],
-                            "role":"member",
-                            "user":data['username']
-                        }))
-                    for soc in user_socket.get(payload["username"],[]):
-                        await safe_send(soc,json.dumps({
-                            "type":"demoted_role",
-                            "chat_id":data["chat_id"],
-                            "role":"member",
-                            "user":data['username']
-                        }))
+                    
+                    await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":data["username"],"payload":{
+                        "type":"demoted_role",
+                        "chat_id":data["chat_id"],
+                        "role":"member",
+                        "user":data['username']
+                    }}))
+                    
+                    await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":payload["username"],"payload":{
+                        "type":"demoted_role",
+                        "chat_id":data["chat_id"],
+                        "role":"member",
+                        "user":data['username']
+                    }}))
                 except Exception as e:
                     print(e)
                 finally:
@@ -1384,43 +1400,41 @@ async def confirm_media(request:Request,chat_id:str,x:upload_id):
             mem=await cursor.fetchall()
             await r.delete(f"sidebar:{payload['username']}")
 
-            for soc in user_socket.get(payload["username"],[]):
-                await safe_send(soc,json.dumps({
-                    "type":"sent_attachment",
-                    "content":x.message,
-                    "chat_id":chat_id,
-                    "sent_at":sent_time,
-                    "id":res[0],
-                    "sender":payload["username"],
-                    "replied_to":x.id,
-                    "replied_content":x.replied_content,
-                    "attachment_url":data["public_url"],
-                    "content_type": data["content_type"],
-                    "original_name": data["original_name"],
-                    "size_bytes": data["size_bytes"],
-                    "grp_name":mem[0][1]
-
-                }))
+            
+            await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":payload["username"],"payload":{
+                "type":"sent_attachment",
+                "content":x.message,
+                "chat_id":chat_id,
+                "sent_at":sent_time,
+                "id":res[0],
+                "sender":payload["username"],
+                "replied_to":x.id,
+                "replied_content":x.replied_content,
+                "attachment_url":data["public_url"],
+                "content_type": data["content_type"],
+                "original_name": data["original_name"],
+                "size_bytes": data["size_bytes"],
+                "grp_name":mem[0][1]
+            }}))
             for users in mem:
                 if users[0]!=payload['username']:
                     await r.delete(f"sidebar:{users[0]}")
-                    for soc in user_socket.get(users[0],[]):
-                        await safe_send(soc,json.dumps({
-                            "type":"receive_attachment",
-                            "content":x.message,
-                            "chat_id":chat_id,
-                            "sent_at":sent_time,
-                            "id":res[0],
-                            "sender":payload["username"],
-                            "replied_to":x.id,
-                            "replied_content":x.replied_content,
-                            "attachment_url":data["public_url"],
-                            "content_type": data["content_type"],
-                            "original_name": data["original_name"],
-                            "size_bytes": data["size_bytes"],
-                            "grp_name":mem[0][1]
-
-                        }))
+                
+                    await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":users[0],"payload":{
+                        "type":"receive_attachment",
+                        "content":x.message,
+                        "chat_id":chat_id,
+                        "sent_at":sent_time,
+                        "id":res[0],
+                        "sender":payload["username"],
+                        "replied_to":x.id,
+                        "replied_content":x.replied_content,
+                        "attachment_url":data["public_url"],
+                        "content_type": data["content_type"],
+                        "original_name": data["original_name"],
+                        "size_bytes": data["size_bytes"],
+                        "grp_name":mem[0][1]
+                    }}))
 
             return {
                 "attachment_url":data["public_url"]
@@ -1487,22 +1501,22 @@ async def create_grp(request:Request,x:grp):
         for users in x.memebers:
             if users!=payload['username']:
                 await r.delete(f"sidebar:{users}")
-                for soc in user_socket.get(users,[]):
-                    await safe_send(soc,json.dumps({
-                        "type":"added_to_grp",
-                        "grp_name":x.group_name,
-                        "chat_id":chat_id
-                        
-                    }))
+                
+                await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":users,"payload":{
+                    "type":"added_to_grp",
+                    "grp_name":x.group_name,
+                    "chat_id":chat_id
+                    
+                }}))
         
         await r.delete(f"sidebar:{payload['username']}")
         
-        for soc in user_socket.get(payload['username'],[]):
-                await safe_send(soc,json.dumps({
-                    "type":"grp_created",
-                    "grp_name":x.group_name,
-                    "chat_id":chat_id
-                }))
+        
+        await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":payload["username"],"payload":{
+            "type":"grp_created",
+            "grp_name":x.group_name,
+            "chat_id":chat_id
+        }}))
         return {
             "grp_creation":"success"
         }
@@ -1588,13 +1602,13 @@ async def add_to_grp(request:Request,x:grp,chat_id:str):
         for users in x.memebers:
             if users!=payload['username']:
                 await r.delete(f"sidebar:{users}")
-                for soc in user_socket.get(users,[]):
-                    await safe_send(soc,json.dumps({
-                        "type":"added_to_grp",
-                        "grp_name":x.group_name,
-                        "chat_id":chat_id
-                        
-                    }))
+                
+                await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":users,"payload":{
+                    "type":"added_to_grp",
+                    "grp_name":x.group_name,
+                    "chat_id":chat_id
+                    
+                }}))
         
         
         
@@ -1645,13 +1659,13 @@ async def grp_invite(request:Request,x:invite_token):
         await connection.commit()
         
         await r.delete(f"sidebar:{payload['username']}")
-        for soc in user_socket.get(payload["username"],[]):
-            await safe_send(soc,json.dumps({
-                "type":"added_to_grp",
-                "grp_name":payload1["grp_name"],
-                "chat_id":chat_id
-                
-            }))
+        
+        await r.publish(SUBSCRIBE_TOPIC,json.dumps({"user":payload["username"],"payload":{
+            "type":"added_to_grp",
+            "grp_name":payload1["grp_name"],
+            "chat_id":chat_id
+            
+        }}))
         
         
         
