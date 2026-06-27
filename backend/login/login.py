@@ -105,8 +105,8 @@ async def shutdown():
 
 
 
-r=redis.Redis(host=REDIS_HOST,port=REDIS_PORT,decode_responses=True)
-# r=redis.from_url(os.getenv("REDIS_URL"),decode_responses=True)
+# r=redis.Redis(host=REDIS_HOST,port=REDIS_PORT,decode_responses=True)
+r=redis.from_url(os.getenv("REDIS_URL"),decode_responses=True)
 
 
 
@@ -219,8 +219,8 @@ async def signup(x:user_input_signup):
 
 
         try:
-            
-            await cursor.execute(query,(email,bcrypt.hashpw(x.password.encode(), bcrypt.gensalt()).decode(),creation_time,username))
+            hashed_pwd=await asyncio.to_thread(lambda:bcrypt.hashpw(x.password.encode(), bcrypt.gensalt()).decode())
+            await cursor.execute(query,(email,hashed_pwd,creation_time,username))
             await connection.commit()
             # response=JSONResponse(
             #     content={
@@ -318,7 +318,8 @@ async def login(x:user_input):
                 "process":"login",
                 "status":"fail"
             }
-        if bcrypt.checkpw(x.password.encode(),creds[0].encode()):
+        pwd_valid=await asyncio.to_thread(bcrypt.checkpw(x.password.encode(),creds[0].encode()))
+        if pwd_valid:
             response=JSONResponse(
                 content={
                     "process":"login",
@@ -548,12 +549,12 @@ async def socket_manager(websocket: WebSocket):
 
     await websocket.accept()
     token=websocket.cookies.get("token")
-
     try:
         if await r.exists(f"blacklist:{token}"):
             await websocket.close(code=4001)
             return
         payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
+        print(f"[worker {os.getpid()}] websocket connected for {payload['username']}")
 
 
         if user_socket.get(payload["username"]) is None:
@@ -1176,22 +1177,6 @@ async def load_chat_after(request:Request, id: int, chat_id: str):
         await cursor.close()
         pool.release(connection)
 
-# @app.patch("/update_read_receipt/{token}/{id}/{chat_id}")
-# async def update_read_receipt(token:str,chat_id:str,id:int):
-#     connection=await pool.acquire()
-#     cursor=await connection.cursor()
-#     try:
-#         if await r.exists(f"blacklist:{token}"):
-#             return
-#         payload=jwt.decode(token,SECRET_KEY,algorithms=["HS256"])
-
-#         query="UPDATE read_receipts SET last_read_id=%s WHERE chat_id=%s AND username=%s"
-
-#         await cursor.execute(query,(id,chat_id,payload["username"]))
-#     finally:
-#         await connection.commit()
-#         await cursor.close()
-#         pool.release(connection)
 
 @app.get("/search_sidebar/{input}")
 async def search_sidebar(request:Request,input:str):
